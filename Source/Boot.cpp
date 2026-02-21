@@ -151,6 +151,7 @@ retryVideo:
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	gCurrentAntialiasingLevel = 0;
+	gGamePrefs.anaglyph = 0;		// anaglyph requires GL_UNSIGNED_INT_8_8_8_8_REV, not available in GLES3
 #else
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
