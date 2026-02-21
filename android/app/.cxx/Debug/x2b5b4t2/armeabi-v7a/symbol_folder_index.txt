@@ -1,1 +1,0 @@
-/home/runner/work/Bugdom2-Android/Bugdom2-Android/android/app/build/intermediates/cxx/Debug/x2b5b4t2/obj/armeabi-v7a
