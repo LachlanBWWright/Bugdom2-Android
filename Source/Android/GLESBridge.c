@@ -918,6 +918,8 @@ bool bridge_IsEnabled(GLenum cap)
         case 0x0BC0: return gAlphaTest.enabled;
         case 0x0B60: return gFog.enabled;
         case 0x0DE1: return gTexture2DEnabled;
+        case 0x0BA1: return gNormalizeEnabled;   // GL_NORMALIZE
+        case 0x803A: return false;               // GL_RESCALE_NORMAL (always off in GLES3)
         default:     return (bool)glIsEnabled(cap);
     }
 }

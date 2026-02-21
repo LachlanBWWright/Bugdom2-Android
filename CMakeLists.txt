@@ -86,7 +86,9 @@ else()
 		set(SDL3_DIR "${CMAKE_SOURCE_DIR}/extern/SDL")
 	endif()
 	message("Building SDL3 from source: " ${SDL3_DIR})
-	add_subdirectory("${SDL3_DIR}" EXCLUDE_FROM_ALL)
+	add_subdirectory("${SDL3_DIR}" "${CMAKE_BINARY_DIR}/SDL3_bin" EXCLUDE_FROM_ALL)
+	# Make SDL3Config.cmake findable after build
+	set(SDL3_DIR "${CMAKE_BINARY_DIR}/SDL3_bin" CACHE PATH "" FORCE)
 endif()
 
 #------------------------------------------------------------------------------
@@ -121,7 +123,12 @@ elseif(APPLE)
 	set_source_files_properties(${CMAKE_SOURCE_DIR}/packaging/${GAME_TARGET}.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
+if(ANDROID)
+add_library(${GAME_TARGET} SHARED ${GAME_SOURCES})
+set_target_properties(${GAME_TARGET} PROPERTIES OUTPUT_NAME "main")
+else()
 add_executable(${GAME_TARGET} ${GAME_SOURCES})
+endif()
 
 target_include_directories(${GAME_TARGET} PRIVATE ${GAME_SRCDIR}/Headers)
 
