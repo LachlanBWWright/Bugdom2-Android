@@ -170,7 +170,7 @@ const  float	sunFadeSpeed = 8;
 		if ((gGameFrameNum % 8) == 0)		// this is super expensive, so don't update gSunBlocked too often
 		{
 			y2 = gGameWindowHeight - y2;					// flip y since 0,0 is bottom left
-			GLfloat	zbuffer;								// read z-buffer to see if flare is blocked
+			GLfloat	zbuffer = 1.0f;							// default: no geometry in front (sun not blocked)
 			glReadPixels(x2, y2, 1,1, GL_DEPTH_COMPONENT, GL_FLOAT, &zbuffer);
 			sunBlocked = (zbuffer < .998f);
 		}
