@@ -844,8 +844,8 @@ GLuint	textureName;
 				0,										// border
 				srcFormat,								// what my format is
 				dataType,								// size of each r,g,b
-				imageMemory);
-#endif							// pointer to the actual texture pixels
+				imageMemory);							// pointer to the actual texture pixels
+#endif
 
 
 			/* SEE IF RAN OUT OF MEMORY WHILE COPYING TO OPENGL */

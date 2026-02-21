@@ -1,7 +1,7 @@
 // GLES BRIDGE IMPLEMENTATION
 
 // Emulates OpenGL 1.x/2.x fixed-function pipeline on top of OpenGL ES 3.0
-// for the Android port of Bugdom.
+// for the Android port of Bugdom 2.
 
 #ifdef __ANDROID__
 
