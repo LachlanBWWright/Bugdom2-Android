@@ -185,6 +185,10 @@ static void ProcessCmdQ(void)
 
 static void UpdateMouseButtonStates(int mouseWheelDeltaX, int mouseWheelDeltaY)
 {
+#ifndef __ANDROID__
+	// On Android, SDL synthesises SDL_BUTTON_LEFT for every touch event.
+	// We use touch controls exclusively, so skip mouse button polling to
+	// prevent synthetic taps from triggering mouse-bound game actions.
 	uint32_t mouseButtons = SDL_GetMouseState(NULL, NULL);
 
 	for (int i = 1; i < NUM_SUPPORTED_MOUSE_BUTTONS_PURESDL; i++)	// SDL buttons start at 1!
@@ -198,6 +202,10 @@ static void UpdateMouseButtonStates(int mouseWheelDeltaX, int mouseWheelDeltaY)
 	UpdateKeyState(&gMouseButtonStates[SDL_BUTTON_WHEELDOWN], mouseWheelDeltaX < 0);
 	UpdateKeyState(&gMouseButtonStates[SDL_BUTTON_WHEELLEFT], mouseWheelDeltaY < 0);
 	UpdateKeyState(&gMouseButtonStates[SDL_BUTTON_WHEELRIGHT], mouseWheelDeltaY > 0);
+#else
+	(void)mouseWheelDeltaX;
+	(void)mouseWheelDeltaY;
+#endif
 }
 
 static void UpdateKeyboardMouseInputNeeds(void)
@@ -783,6 +791,14 @@ static void MouseSmoothing_PopOldestSnapshot(void)
 	state->ringStart = (state->ringStart + 1) % DELTA_MOUSE_MAX_SNAPSHOTS;
 	state->ringLength--;
 
+	// Force accumulators to exact zero when ring empties to avoid
+	// floating-point residue tripping the assert (pitfall #12 on Android).
+	if (state->ringLength == 0)
+	{
+		state->dxAccu = 0.0f;
+		state->dyAccu = 0.0f;
+	}
+
 	GAME_ASSERT(state->ringLength != 0 || (state->dxAccu == 0 && state->dyAccu == 0));
 }
 
@@ -819,6 +835,14 @@ static void MouseSmoothing_StartFrame(void)
 static void MouseSmoothing_OnMouseMotion(const SDL_MouseMotionEvent* motion)
 {
 	struct MouseSmoothingState* state = &gMouseSmoothing;
+
+#ifdef __ANDROID__
+	// On Android, SDL synthesises mouse-motion events from touch input.
+	// Skip them to prevent the ring-buffer from filling with touch data
+	// and tripping the floating-point residue assertion.
+	if (motion->which == SDL_TOUCH_MOUSEID)
+		return;
+#endif
 
 	// ignore mouse input if user has alt-tabbed away from the game
 	if (!(SDL_GetWindowFlags(gSDLWindow) & SDL_WINDOW_INPUT_FOCUS))

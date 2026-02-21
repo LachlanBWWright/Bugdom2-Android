@@ -268,12 +268,6 @@ static float      gImmCurrentTexCoord[2] = { 0, 0 };
 
 static GLuint gShaderProgram = 0;
 
-// Attribute locations
-static GLint  gAttrPosition = -1;
-static GLint  gAttrNormal   = -1;
-static GLint  gAttrTexCoord = -1;
-static GLint  gAttrColor    = -1;
-
 // Uniform locations
 static GLint  gUniMVMatrix      = -1;
 static GLint  gUniProjMatrix    = -1;
