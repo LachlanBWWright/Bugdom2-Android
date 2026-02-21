@@ -14,6 +14,15 @@
 // can compile without changes.
 typedef double GLdouble;
 
+// GL error codes absent from GLES3 headers (stack overflow/underflow are
+// only possible in the fixed-function pipeline, which GLES3 lacks)
+#ifndef GL_STACK_OVERFLOW
+#define GL_STACK_OVERFLOW  0x0503
+#endif
+#ifndef GL_STACK_UNDERFLOW
+#define GL_STACK_UNDERFLOW 0x0504
+#endif
+
 // Function pointer types used in OGL_Support.c (not defined in GLES3 headers)
 typedef void (*PFNGLACTIVETEXTUREPROC)(GLenum texture);
 typedef void (*PFNGLCLIENTACTIVETEXTUREARBPROC)(GLenum texture);
@@ -291,6 +300,9 @@ void bridge_FlushState(void);
 // Current color
 #define glColor4f           bridge_Color4f
 #define glColor4fv          bridge_Color4fv
+static inline void bridge_Color3f(GLfloat r, GLfloat g, GLfloat b)
+    { bridge_Color4f(r, g, b, 1.0f); }
+#define glColor3f           bridge_Color3f
 
 // Draw calls
 #define glDrawElements      bridge_DrawElements
@@ -301,8 +313,17 @@ void bridge_FlushState(void);
 #define glEnd               bridge_End
 #define glVertex3f          bridge_Vertex3f
 #define glVertex2f          bridge_Vertex2f
+static inline void bridge_Vertex3fv(const GLfloat *v)
+    { bridge_Vertex3f(v[0], v[1], v[2]); }
+#define glVertex3fv         bridge_Vertex3fv
 #define glNormal3f          bridge_Normal3f
+static inline void bridge_Normal3fv(const GLfloat *v)
+    { bridge_Normal3f(v[0], v[1], v[2]); }
+#define glNormal3fv         bridge_Normal3fv
 #define glTexCoord2f        bridge_TexCoord2f
+static inline void bridge_TexCoord2fv(const GLfloat *v)
+    { bridge_TexCoord2f(v[0], v[1]); }
+#define glTexCoord2fv       bridge_TexCoord2fv
 
 // Polygon mode (stub)
 #define glPolygonMode       bridge_PolygonMode
