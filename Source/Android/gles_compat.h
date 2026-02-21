@@ -362,7 +362,9 @@ static inline void bridge_TexGeni(GLenum coord, GLenum pname, GLint param)
 #define GL_QUADS 0x0007
 #endif
 
-// GL_UNPACK_ROW_LENGTH is supported in GLES3
+// GL_UNPACK_ROW_LENGTH is supported in GLES3 (already defined in gl3.h)
+#ifndef GL_UNPACK_ROW_LENGTH
 #define GL_UNPACK_ROW_LENGTH    0x0CF2
+#endif
 
 #endif // __ANDROID__
