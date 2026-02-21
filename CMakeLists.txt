@@ -82,11 +82,16 @@ if(NOT BUILD_SDL_FROM_SOURCE)
 	find_package(SDL3 CONFIG REQUIRED)
 	message("Found pre-built SDL3")
 else()
-	if(NOT DEFINED SDL3_DIR)
-		set(SDL3_DIR "${CMAKE_SOURCE_DIR}/extern/SDL")
+	set(_sdl3_src "${CMAKE_SOURCE_DIR}/extern/SDL")
+	if(DEFINED SDL3_DIR AND EXISTS "${SDL3_DIR}/CMakeLists.txt")
+		set(_sdl3_src "${SDL3_DIR}")
 	endif()
-	message("Building SDL3 from source: " ${SDL3_DIR})
-	add_subdirectory("${SDL3_DIR}" EXCLUDE_FROM_ALL)
+	set(_sdl3_bin "${CMAKE_BINARY_DIR}/extern/SDL")
+	message("Building SDL3 from source: " ${_sdl3_src})
+	add_subdirectory("${_sdl3_src}" "${_sdl3_bin}" EXCLUDE_FROM_ALL)
+	# SDL3Config.cmake is generated in the binary dir; point SDL3_DIR there so
+	# downstream find_package(SDL3) calls (e.g. from Pomme) can find it.
+	set(SDL3_DIR "${_sdl3_bin}" CACHE PATH "SDL3 build dir" FORCE)
 endif()
 
 #------------------------------------------------------------------------------
@@ -95,7 +100,9 @@ endif()
 
 add_subdirectory(extern/Pomme)
 
-find_package(OpenGL REQUIRED)
+if(NOT ANDROID)
+	find_package(OpenGL REQUIRED)
+endif()
 
 #------------------------------------------------------------------------------
 # EXECUTABLE TARGET
@@ -119,9 +126,19 @@ elseif(APPLE)
 	set_source_files_properties(${CMAKE_SOURCE_DIR}/packaging/${GAME_TARGET}.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
+if(ANDROID)
+add_library(${GAME_TARGET} SHARED ${GAME_SOURCES})
+set_target_properties(${GAME_TARGET} PROPERTIES OUTPUT_NAME "main")
+else()
 add_executable(${GAME_TARGET} ${GAME_SOURCES})
+endif()
 
 target_include_directories(${GAME_TARGET} PRIVATE ${GAME_SRCDIR}/Headers)
+
+# On Android, also include the Android source directory for gles_compat.h etc.
+if(ANDROID)
+	target_include_directories(${GAME_TARGET} PRIVATE ${GAME_SRCDIR})
+endif()
 
 #------------------------------------------------------------------------------
 # COMPILER/LINKER OPTIONS
@@ -209,7 +226,11 @@ else()
 endif()
 
 # Link core dependencies
-target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+if(ANDROID)
+	target_link_libraries(${GAME_TARGET} PRIVATE Pomme EGL GLESv3 android log)
+else()
+	target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+endif()
 
 # Add required frameworks for KillMacMouseAcceleration
 if(APPLE)
@@ -276,38 +297,42 @@ set_target_properties(${GAME_TARGET} PROPERTIES
 # POST-BUILD (COPY ASSETS, ETC.)
 #------------------------------------------------------------------------------
 
-if(APPLE)
-	set(GAME_DATA_TARGET_LOCATION "$<TARGET_FILE_DIR:${GAME_TARGET}>/../Resources")
-else()
-	set(GAME_DATA_TARGET_LOCATION "$<TARGET_FILE_DIR:${GAME_TARGET}>/Data")
-endif()
-
-add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${GAME_DATADIR}" "${GAME_DATA_TARGET_LOCATION}")
-
-if(APPLE)
-	set(INFO_PLIST "${GAME_DATA_TARGET_LOCATION}/../Info.plist")
+if(NOT ANDROID)
+	if(APPLE)
+		set(GAME_DATA_TARGET_LOCATION "$<TARGET_FILE_DIR:${GAME_TARGET}>/../Resources")
+	else()
+		set(GAME_DATA_TARGET_LOCATION "$<TARGET_FILE_DIR:${GAME_TARGET}>/Data")
+	endif()
 
 	add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
-		# Copy extra resources to app bundle
-		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packaging/mainmenu.nib ${GAME_DATA_TARGET_LOCATION}/mainmenu.nib
+		COMMAND ${CMAKE_COMMAND} -E copy_directory "${GAME_DATADIR}" "${GAME_DATA_TARGET_LOCATION}")
 
-		# Info.plist: high-DPI support, Game Mode, honor mainmenu.nib
-		COMMAND plutil -replace NSHighResolutionCapable -bool true ${INFO_PLIST}
-		COMMAND plutil -replace LSApplicationCategoryType -string "public.app-category.games" ${INFO_PLIST}
-		COMMAND plutil -replace NSMainNibFile -string "mainmenu" ${INFO_PLIST}
-	)
-endif()
+	if(APPLE)
+		set(INFO_PLIST "${GAME_DATA_TARGET_LOCATION}/../Info.plist")
 
-# Windows-specific libraries
-if(WIN32)
-	# Copy SDL3 DLLs to output folder on Windows for convenience
-	add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${GAME_TARGET}> $<TARGET_FILE_DIR:${GAME_TARGET}>)
+		add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
+			# Copy extra resources to app bundle
+			COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packaging/mainmenu.nib ${GAME_DATA_TARGET_LOCATION}/mainmenu.nib
 
-	# When installing (cmake --install), copy Visual Studio redistributable DLLs to install location
-	include(InstallRequiredSystemLibraries)
+			# Info.plist: high-DPI support, Game Mode, honor mainmenu.nib
+			COMMAND plutil -replace NSHighResolutionCapable -bool true ${INFO_PLIST}
+			COMMAND plutil -replace LSApplicationCategoryType -string "public.app-category.games" ${INFO_PLIST}
+			COMMAND plutil -replace NSMainNibFile -string "mainmenu" ${INFO_PLIST}
+		)
+	endif()
+
+	# Windows-specific libraries
+	if(WIN32)
+		# Copy SDL3 DLLs to output folder on Windows for convenience
+		add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${GAME_TARGET}> $<TARGET_FILE_DIR:${GAME_TARGET}>)
+
+		# When installing (cmake --install), copy Visual Studio redistributable DLLs to install location
+		include(InstallRequiredSystemLibraries)
+	endif()
 endif()
 
 # Copy documentation to output folder
-configure_file(${CMAKE_SOURCE_DIR}/packaging/ReadMe.txt.in ${CMAKE_CURRENT_BINARY_DIR}/ReadMe.txt)
+if(NOT ANDROID)
+	configure_file(${CMAKE_SOURCE_DIR}/packaging/ReadMe.txt.in ${CMAKE_CURRENT_BINARY_DIR}/ReadMe.txt)
+endif()

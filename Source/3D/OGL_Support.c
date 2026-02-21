@@ -12,6 +12,10 @@
 
 #include "game.h"
 #include "tga.h"
+#ifdef __ANDROID__
+#include "Android/GLESBridge.h"
+static void noop_ClientActiveTexture(GLenum t) { (void)t; }
+#endif
 
 
 /****************************/
@@ -129,11 +133,20 @@ void OGL_Boot(void)
 			/* GET GL PROCEDURES */
 			// Necessary on Windows
 
+#ifdef __ANDROID__
+	// On Android GLES3, glActiveTexture is a real function, not an extension proc.
+	gGlActiveTextureProc = glActiveTexture;
+	// glClientActiveTexture does not exist in GLES3; use a no-op stub.
+	gGlClientActiveTextureProc = noop_ClientActiveTexture;
+	// Initialize the fixed-function emulation bridge
+	GLESBridge_Init();
+#else
 	gGlActiveTextureProc = (PFNGLACTIVETEXTUREPROC) SDL_GL_GetProcAddress("glActiveTexture");
 	GAME_ASSERT(gGlActiveTextureProc);
 
 	gGlClientActiveTextureProc = (PFNGLCLIENTACTIVETEXTUREARBPROC) SDL_GL_GetProcAddress("glClientActiveTexture");
 	GAME_ASSERT(gGlClientActiveTextureProc);
+#endif
 
 	OGL_CheckError();
 }
@@ -689,6 +702,13 @@ do_anaglyph:
 			/* END RENDER */
 			/**************/
 
+#ifdef __ANDROID__
+	// Draw the touch controls overlay on top of everything
+	{
+		extern void TouchControls_Draw(void);
+		TouchControls_Draw();
+	}
+#endif
 
            /* SWAP THE BUFFS */
 
@@ -763,6 +783,59 @@ GLuint	textureName;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	#ifdef __ANDROID__
+	// GLES3 does not support GL_BGRA or GL_UNSIGNED_SHORT_1_5_5_5_REV as src format.
+	// Convert BGRA data to RGBA/GL_UNSIGNED_BYTE before uploading.
+	void *uploadData = imageMemory;
+	void *convertedData = NULL;
+	GLint uploadSrcFormat = srcFormat;
+	GLint uploadDestFormat = destFormat;
+	GLint uploadDataType = dataType;
+	if (srcFormat == 0x80E1 /* GL_BGRA / GL_BGRA_EXT */)
+	{
+		int numPixels = width * height;
+		convertedData = SDL_malloc((size_t)(numPixels * 4));
+		if (convertedData)
+		{
+			uint8_t *dst = (uint8_t *)convertedData;
+			if (dataType == 0x8366 /* GL_UNSIGNED_SHORT_1_5_5_5_REV */)
+			{
+				const uint16_t *src16 = (const uint16_t *)imageMemory;
+				for (int i = 0; i < numPixels; i++)
+				{
+					uint16_t px = src16[i];
+					dst[i*4+0] = (uint8_t)(((px >> 10) & 0x1F) * 255 / 31);
+					dst[i*4+1] = (uint8_t)(((px >>  5) & 0x1F) * 255 / 31);
+					dst[i*4+2] = (uint8_t)(((px >>  0) & 0x1F) * 255 / 31);
+					dst[i*4+3] = (uint8_t)(((px >> 15) & 0x01) * 255);
+				}
+			}
+			else
+			{
+				const uint8_t *src8 = (const uint8_t *)imageMemory;
+				for (int i = 0; i < numPixels; i++)
+				{
+					dst[i*4+0] = src8[i*4+2];
+					dst[i*4+1] = src8[i*4+1];
+					dst[i*4+2] = src8[i*4+0];
+					dst[i*4+3] = src8[i*4+3];
+				}
+			}
+			uploadData = convertedData;
+			uploadSrcFormat = GL_RGBA;
+			uploadDestFormat = GL_RGBA;
+			uploadDataType = GL_UNSIGNED_BYTE;
+		}
+	}
+	// GLES3 requires internalFormat to be compatible with srcFormat.
+	// If srcFormat is GL_RGBA but internalFormat is GL_RGB, promote to GL_RGBA.
+	if (uploadSrcFormat == GL_RGBA && uploadDestFormat == 0x1907 /* GL_RGB */)
+		uploadDestFormat = GL_RGBA;
+	glTexImage2D(GL_TEXTURE_2D, 0, uploadDestFormat, width, height, 0,
+				uploadSrcFormat, uploadDataType, uploadData);
+	if (convertedData)
+		SDL_free(convertedData);
+#else
 	glTexImage2D(GL_TEXTURE_2D,
 				0,										// mipmap level
 				destFormat,								// format in OpenGL
@@ -772,6 +845,7 @@ GLuint	textureName;
 				srcFormat,								// what my format is
 				dataType,								// size of each r,g,b
 				imageMemory);							// pointer to the actual texture pixels
+#endif
 
 
 			/* SEE IF RAN OUT OF MEMORY WHILE COPYING TO OPENGL */
@@ -1183,6 +1257,12 @@ uint32_t	a;
 
 void OGL_Texture_SetOpenGLTexture(GLuint textureName)
 {
+#ifdef __ANDROID__
+	// On Android the bridge logs errors at the draw-call site; clear any
+	// accumulated error so the checks below only catch genuine new failures.
+	glGetError();
+#endif
+
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	if (OGL_CheckError())
 		DoFatalAlert("OGL_Texture_SetOpenGLTexture: glPixelStorei failed!");
