@@ -240,7 +240,8 @@ static ClientArray gTexCoordArray = { false, 2, GL_FLOAT, 0, NULL };
 
 static GLuint gStreamVBO   = 0;   // vertex data
 static GLuint gStreamIBO   = 0;   // index data
-static GLuint gVAO         = 0;   // vertex array object
+static GLuint gVAO         = 0;   // vertex array object (vertex-array draws)
+static GLuint gImmVAO      = 0;   // separate VAO for immediate-mode draws (bridge_End)
 
 // -------------------------------------------------------------------------
 // Immediate mode buffers
@@ -614,7 +615,7 @@ void GLESBridge_Init(void)
     glGenBuffers(1, &gStreamVBO);
     glGenBuffers(1, &gStreamIBO);
 
-    // Create VAO
+    // Create VAO for vertex-array draws
     glGenVertexArrays(1, &gVAO);
     glBindVertexArray(gVAO);
 
@@ -628,6 +629,17 @@ void GLESBridge_Init(void)
     glEnableVertexAttribArray(2); // texcoord
     glEnableVertexAttribArray(3); // color
 
+    glBindVertexArray(0);
+
+    // Create a SEPARATE VAO for immediate-mode draws (bridge_End).
+    // The porting guide recommends separate VAOs to avoid VBO state contamination.
+    glGenVertexArrays(1, &gImmVAO);
+    glBindVertexArray(gImmVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, gStreamVBO);  // same VBO, different VAO
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glEnableVertexAttribArray(3);
     glBindVertexArray(0);
 
     // Upload identity matrices as defaults
@@ -647,6 +659,7 @@ void GLESBridge_Shutdown(void)
     if (gStreamVBO)     { glDeleteBuffers(1, &gStreamVBO); gStreamVBO = 0; }
     if (gStreamIBO)     { glDeleteBuffers(1, &gStreamIBO); gStreamIBO = 0; }
     if (gVAO)           { glDeleteVertexArrays(1, &gVAO); gVAO = 0; }
+    if (gImmVAO)        { glDeleteVertexArrays(1, &gImmVAO); gImmVAO = 0; }
 }
 
 // -------------------------------------------------------------------------
@@ -1058,6 +1071,11 @@ void bridge_FlushState(void)
 
     // Current color
     glUniform4fv(gUniCurrentColor, 1, gCurrentColor);
+
+    {
+        GLenum err = glGetError();
+        if (err) LOGE("bridge_FlushState: GL error 0x%x after state upload", err);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -1164,11 +1182,11 @@ static int UploadClientArrays(int numVerts)
     return numVerts;
 }
 
-static void SetupVAOAttribs(void)
+static void SetupVAOAttribsForVAO(GLuint vao)
 {
     const int kStride = (3 + 3 + 2 + 4) * 4;
 
-    glBindVertexArray(gVAO);
+    glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, gStreamVBO);
 
     // a_position: offset 0
@@ -1187,6 +1205,9 @@ static void SetupVAOAttribs(void)
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, kStride, (void *)(8 * 4));
     glEnableVertexAttribArray(3);
 }
+
+static void SetupVAOAttribs(void)  { SetupVAOAttribsForVAO(gVAO);    }
+static void SetupImmVAOAttribs(void) { SetupVAOAttribsForVAO(gImmVAO); }
 
 // -------------------------------------------------------------------------
 // Draw calls
@@ -1236,6 +1257,10 @@ void bridge_DrawElements(GLenum mode, GLsizei count, GLenum type, const GLvoid *
     glUniform1i(gUniHasVertexColors, (GLint)(gColorArray.enabled && gColorArray.pointer != NULL));
 
     glDrawElements(mode, count, type, 0);
+    {
+        GLenum err = glGetError();
+        if (err) LOGE("bridge_DrawElements: GL error 0x%x after glDrawElements", err);
+    }
     glBindVertexArray(0);
 }
 
@@ -1268,6 +1293,10 @@ void bridge_DrawArrays(GLenum mode, GLint first, GLsizei count)
 
     glUniform1i(gUniHasVertexColors, (GLint)(gColorArray.enabled && gColorArray.pointer != NULL));
     glDrawArrays(mode, 0, count);
+    {
+        GLenum err = glGetError();
+        if (err) LOGE("bridge_DrawArrays: GL error 0x%x after glDrawArrays", err);
+    }
     glBindVertexArray(0);
 
     // Restore pointers
@@ -1360,10 +1389,14 @@ void bridge_End(void)
 
     glBindBuffer(GL_ARRAY_BUFFER, gStreamVBO);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(drawCount * kStride), buf, GL_STREAM_DRAW);
-    SetupVAOAttribs();
+    SetupImmVAOAttribs();  // use dedicated immediate-mode VAO (avoids VBO state contamination)
 
     glUniform1i(gUniHasVertexColors, GL_TRUE);
     glDrawArrays(drawMode, 0, drawCount);
+    {
+        GLenum err = glGetError();
+        if (err) LOGE("bridge_End: GL error 0x%x after glDrawArrays (mode=0x%x count=%d)", err, drawMode, drawCount);
+    }
     glBindVertexArray(0);
 
     gImmVertCount = 0;

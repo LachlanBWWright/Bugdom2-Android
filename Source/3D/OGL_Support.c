@@ -1257,6 +1257,12 @@ uint32_t	a;
 
 void OGL_Texture_SetOpenGLTexture(GLuint textureName)
 {
+#ifdef __ANDROID__
+	// On Android the bridge logs errors at the draw-call site; clear any
+	// accumulated error so the checks below only catch genuine new failures.
+	glGetError();
+#endif
+
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	if (OGL_CheckError())
 		DoFatalAlert("OGL_Texture_SetOpenGLTexture: glPixelStorei failed!");

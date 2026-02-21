@@ -252,10 +252,10 @@ static void UpdateKeyboardMouseInputNeeds(void)
 			{
 				case kNeed_TurnLeft:  pressed |= (jx < -0.5f); break;
 				case kNeed_TurnRight: pressed |= (jx >  0.5f); break;
-				case kNeed_Forward:   pressed |= (jy >  0.5f); break;
-				case kNeed_Backward:  pressed |= (jy < -0.5f); break;
-				case kNeed_UIUp:      pressed |= (jy >  0.5f); break;
-				case kNeed_UIDown:    pressed |= (jy < -0.5f); break;
+				case kNeed_Forward:   pressed |= (jy < -0.5f); break;  // stick up = dy<0 = forward
+				case kNeed_Backward:  pressed |= (jy >  0.5f); break;  // stick down = dy>0 = backward
+				case kNeed_UIUp:      pressed |= (jy < -0.5f); break;  // stick up = menu up
+				case kNeed_UIDown:    pressed |= (jy >  0.5f); break;  // stick down = menu down
 				case kNeed_UIPrev:    pressed |= (jx < -0.5f); break;
 				case kNeed_UINext:    pressed |= (jx >  0.5f); break;
 				default: break;

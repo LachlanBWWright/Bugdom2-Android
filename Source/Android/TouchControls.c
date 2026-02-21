@@ -73,11 +73,11 @@ static void UpdateButtonPositions(void)
     float cy = NormY(BTN_CY_NORM);
     float sp = NormX(BTN_SPACING);
 
-    // Up = Jump, Right = Kick, Down = Pickup, Left = Buddy
-    gBtnCX[kTouchBtn_Jump]   = cx;         gBtnCY[kTouchBtn_Jump]   = cy - sp;
-    gBtnCX[kTouchBtn_Kick]   = cx + sp;    gBtnCY[kTouchBtn_Kick]   = cy;
-    gBtnCX[kTouchBtn_Pickup] = cx;         gBtnCY[kTouchBtn_Pickup] = cy + sp;
-    gBtnCX[kTouchBtn_Buddy]  = cx - sp;    gBtnCY[kTouchBtn_Buddy]  = cy;
+    // Xbox diamond layout: A=bottom(green), B=right(red), X=left(blue), Y=top(yellow)
+    gBtnCX[kTouchBtn_Jump]   = cx;         gBtnCY[kTouchBtn_Jump]   = cy + sp;  // A – bottom
+    gBtnCX[kTouchBtn_Kick]   = cx + sp;    gBtnCY[kTouchBtn_Kick]   = cy;       // B – right
+    gBtnCX[kTouchBtn_Pickup] = cx - sp;    gBtnCY[kTouchBtn_Pickup] = cy;       // X – left
+    gBtnCX[kTouchBtn_Buddy]  = cx;         gBtnCY[kTouchBtn_Buddy]  = cy - sp;  // Y – top
     gBtnCX[kTouchBtn_Pause]  = NormX(PAUSE_CX_NORM);
     gBtnCY[kTouchBtn_Pause]  = NormY(PAUSE_CY_NORM);
 }
@@ -125,7 +125,7 @@ static void UpdateJoyAnalog(void)
     if (len < DEAD_ZONE) { gJoyAnalogX = gJoyAnalogY = 0; return; }
     float norm = (len - DEAD_ZONE) / (1.0f - DEAD_ZONE);
     gJoyAnalogX =  dx * norm;
-    gJoyAnalogY = -dy * norm;   // SDL y is down, game forward is +y
+    gJoyAnalogY =  dy * norm;   // SDL y-down: pushing up gives dy<0, matching game's forward=-Z convention
 }
 
 // -------------------------------------------------------------------------
@@ -419,14 +419,23 @@ void TouchControls_Draw(void)
         DrawFilledCircle(tx, ty, jr * 0.3f, 16,  0.5f, 0.5f, 0.5f, 0.45f);
     }
 
-    // Draw action buttons
+    // Draw action buttons with Xbox-style colors
+    // A=green(Jump), B=red(Kick), X=blue(Pickup), Y=yellow(Buddy), Pause=gray
+    static const float kBtnR[kTouchBtn_COUNT] = { 0.13f, 0.90f, 0.00f, 0.80f, 0.50f };
+    static const float kBtnG[kTouchBtn_COUNT] = { 0.80f, 0.10f, 0.27f, 0.80f, 0.50f };
+    static const float kBtnB[kTouchBtn_COUNT] = { 0.13f, 0.10f, 0.90f, 0.00f, 0.50f };
+
+#define CLAMP1(x)  ((x) > 1.0f ? 1.0f : (x))
     for (int i = 0; i < kTouchBtn_COUNT; i++)
     {
         float r = BtnRadius(i);
-        float alpha = gBtnDown[i] ? 0.55f : 0.22f;
-        DrawFilledCircle(gBtnCX[i], gBtnCY[i], r, 20,   0.4f, 0.4f, 0.8f, alpha);
-        DrawCircleOutline(gBtnCX[i], gBtnCY[i], r, 20,  0.6f, 0.6f, 1.0f, 0.55f);
+        float alpha = gBtnDown[i] ? 0.75f : 0.38f;
+        DrawFilledCircle(gBtnCX[i], gBtnCY[i], r, 20,
+                         kBtnR[i], kBtnG[i], kBtnB[i], alpha);
+        DrawCircleOutline(gBtnCX[i], gBtnCY[i], r, 20,
+                          CLAMP1(kBtnR[i]*1.2f), CLAMP1(kBtnG[i]*1.2f), CLAMP1(kBtnB[i]*1.2f), 0.75f);
     }
+#undef CLAMP1
 
     // Restore state
     if (depthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
