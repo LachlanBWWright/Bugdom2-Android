@@ -4,6 +4,10 @@
 
 #include "game.h"
 
+#ifdef __ANDROID__
+#include "Android/TouchControls.h"
+#endif
+
 /***************/
 /* CONSTANTS   */
 /***************/
@@ -213,7 +217,37 @@ static void UpdateKeyboardMouseInputNeeds(void)
 			}
 		}
 
+#ifndef __ANDROID__
+		// On Android, skip mouse-button bindings to prevent spurious input
+		// from touch events being synthesised as mouse buttons.
 		pressed |= gMouseButtonStates[kb->mouseButton] & KEYSTATE_ACTIVE_BIT;
+#endif
+
+#ifdef __ANDROID__
+		// Map touch buttons to game needs
+		switch (need)
+		{
+			case kNeed_Jump:        pressed |= TouchControls_IsButtonDown(kTouchBtn_Jump);   break;
+			case kNeed_Kick:        pressed |= TouchControls_IsButtonDown(kTouchBtn_Kick);   break;
+			case kNeed_PickupDrop:  pressed |= TouchControls_IsButtonDown(kTouchBtn_Pickup); break;
+			case kNeed_LaunchBuddy: pressed |= TouchControls_IsButtonDown(kTouchBtn_Buddy);  break;
+			case kNeed_UIPause:     pressed |= TouchControls_IsButtonDown(kTouchBtn_Pause);  break;
+			default: break;
+		}
+		// Also handle joystick directions as digital keys for menus
+		{
+			float jx = TouchControls_GetJoystickX();
+			float jy = TouchControls_GetJoystickY();
+			switch (need)
+			{
+				case kNeed_TurnLeft:  pressed |= (jx < -0.5f); break;
+				case kNeed_TurnRight: pressed |= (jx >  0.5f); break;
+				case kNeed_Forward:   pressed |= (jy >  0.5f); break;
+				case kNeed_Backward:  pressed |= (jy < -0.5f); break;
+				default: break;
+			}
+		}
+#endif
 
 		UpdateKeyState(&gNeedStates[need], pressed);
 	}
@@ -350,6 +384,14 @@ void UpdateInput(void)		// Also called DoSDLMaintenance in other ports
 			case SDL_EVENT_GAMEPAD_BUTTON_UP:
 				gUserPrefersGamepad = true;
 				break;
+
+#ifdef __ANDROID__
+			case SDL_EVENT_FINGER_DOWN:
+			case SDL_EVENT_FINGER_UP:
+			case SDL_EVENT_FINGER_MOTION:
+				TouchControls_ProcessEvent(&event);
+				break;
+#endif
 		}
 	}
 
@@ -978,6 +1020,20 @@ static void SetPlayerAxisControls(void)
 
 	gPlayerInfo.analogControlX = x;
 	gPlayerInfo.analogControlZ = z;
+
+#ifdef __ANDROID__
+		/* ON ANDROID, CHECK TOUCH JOYSTICK AS ANALOG INPUT */
+
+	{
+		float jx = TouchControls_GetJoystickX();
+		float jy = TouchControls_GetJoystickY();
+		if (jx != 0.0f || jy != 0.0f)
+		{
+			gPlayerInfo.analogControlX = jx;
+			gPlayerInfo.analogControlZ = jy;
+		}
+	}
+#endif
 
 		/* AND FINALLY SEE IF MOUSE DELTAS ARE BEST */
 
