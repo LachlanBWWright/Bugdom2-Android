@@ -1146,8 +1146,19 @@ static int UploadClientArrays(int numVerts)
         // Color (float4)
         if (cp && gColorArray.enabled)
         {
-            const float *c = (const float *)(cp + i * cs);
-            out[8] = c[0]; out[9] = c[1]; out[10] = c[2]; out[11] = c[3];
+            if (gColorArray.type == GL_UNSIGNED_BYTE)
+            {
+                const uint8_t *cb = (const uint8_t *)(cp + i * cs);
+                out[8]  = cb[0] / 255.0f;
+                out[9]  = cb[1] / 255.0f;
+                out[10] = cb[2] / 255.0f;
+                out[11] = cb[3] / 255.0f;
+            }
+            else // GL_FLOAT
+            {
+                const float *c = (const float *)(cp + i * cs);
+                out[8] = c[0]; out[9] = c[1]; out[10] = c[2]; out[11] = c[3];
+            }
         }
         else { out[8] = gCurrentColor[0]; out[9] = gCurrentColor[1]; out[10] = gCurrentColor[2]; out[11] = gCurrentColor[3]; }
     }
