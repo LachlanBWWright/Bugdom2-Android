@@ -232,9 +232,11 @@ static void UpdateKeyboardMouseInputNeeds(void)
 			case kNeed_PickupDrop:  pressed |= TouchControls_IsButtonDown(kTouchBtn_Pickup); break;
 			case kNeed_LaunchBuddy: pressed |= TouchControls_IsButtonDown(kTouchBtn_Buddy);  break;
 			case kNeed_UIPause:     pressed |= TouchControls_IsButtonDown(kTouchBtn_Pause);  break;
+			case kNeed_UIConfirm:   pressed |= TouchControls_IsButtonDown(kTouchBtn_Jump);   break;
+			case kNeed_UIBack:      pressed |= TouchControls_IsButtonDown(kTouchBtn_Kick);   break;
 			default: break;
 		}
-		// Also handle joystick directions as digital keys for menus
+		// Also handle joystick directions as digital keys for menus and movement
 		{
 			float jx = TouchControls_GetJoystickX();
 			float jy = TouchControls_GetJoystickY();
@@ -244,6 +246,10 @@ static void UpdateKeyboardMouseInputNeeds(void)
 				case kNeed_TurnRight: pressed |= (jx >  0.5f); break;
 				case kNeed_Forward:   pressed |= (jy >  0.5f); break;
 				case kNeed_Backward:  pressed |= (jy < -0.5f); break;
+				case kNeed_UIUp:      pressed |= (jy >  0.5f); break;
+				case kNeed_UIDown:    pressed |= (jy < -0.5f); break;
+				case kNeed_UIPrev:    pressed |= (jx < -0.5f); break;
+				case kNeed_UINext:    pressed |= (jx >  0.5f); break;
 				default: break;
 			}
 		}

@@ -212,6 +212,10 @@ static void Shutdown()
 
 #ifdef __ANDROID__
 	TouchControls_Shutdown();
+	{
+		extern void GLESBridge_Shutdown(void);
+		GLESBridge_Shutdown();
+	}
 #endif
 
 	Pomme::Shutdown();
