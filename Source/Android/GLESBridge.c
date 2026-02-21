@@ -874,6 +874,11 @@ void bridge_Enable(GLenum cap)
         case 0x0BC0: gAlphaTest.enabled    = true;  break; // GL_ALPHA_TEST
         case 0x0B60: gFog.enabled          = true;  break; // GL_FOG
         case 0x0DE1: gTexture2DEnabled     = true;  break; // GL_TEXTURE_2D – no-op in GLES3
+        case 0x803A: break; // GL_RESCALE_NORMAL – no-op in GLES3
+        case 0x0C60: break; // GL_TEXTURE_GEN_S – no-op in GLES3
+        case 0x0C61: break; // GL_TEXTURE_GEN_T – no-op in GLES3
+        case 0x0C62: break; // GL_TEXTURE_GEN_R – no-op in GLES3
+        case 0x0C63: break; // GL_TEXTURE_GEN_Q – no-op in GLES3
 
         // For everything GLES supports natively, pass through
         default:
@@ -899,6 +904,11 @@ void bridge_Disable(GLenum cap)
         case 0x0BC0: gAlphaTest.enabled    = false; break;
         case 0x0B60: gFog.enabled          = false; break;
         case 0x0DE1: gTexture2DEnabled     = false; break; // GL_TEXTURE_2D
+        case 0x803A: break; // GL_RESCALE_NORMAL – no-op in GLES3
+        case 0x0C60: break; // GL_TEXTURE_GEN_S – no-op in GLES3
+        case 0x0C61: break; // GL_TEXTURE_GEN_T – no-op in GLES3
+        case 0x0C62: break; // GL_TEXTURE_GEN_R – no-op in GLES3
+        case 0x0C63: break; // GL_TEXTURE_GEN_Q – no-op in GLES3
 
         default:
             glDisable(cap);

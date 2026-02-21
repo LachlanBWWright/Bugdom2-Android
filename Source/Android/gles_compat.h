@@ -310,6 +310,31 @@ void bridge_FlushState(void);
 // Texture environment (stub)
 #define glTexEnvi           bridge_TexEnvi
 
+// Texture generation (stub – sphere mapping not available in GLES3)
+#ifndef GL_S
+#define GL_S                    0x2000
+#endif
+#ifndef GL_T
+#define GL_T                    0x2001
+#endif
+#ifndef GL_TEXTURE_GEN_MODE
+#define GL_TEXTURE_GEN_MODE     0x2500
+#endif
+#ifndef GL_SPHERE_MAP
+#define GL_SPHERE_MAP           0x2402
+#endif
+#ifndef GL_TEXTURE_GEN_S
+#define GL_TEXTURE_GEN_S        0x0C60
+#endif
+#ifndef GL_TEXTURE_GEN_T
+#define GL_TEXTURE_GEN_T        0x0C61
+#endif
+static inline void bridge_TexGeni(GLenum coord, GLenum pname, GLint param)
+{
+    (void)coord; (void)pname; (void)param;
+}
+#define glTexGeni           bridge_TexGeni
+
 // Redirect unsupported enums / formats
 // These desktop-GL / extension constants are not defined by GLES3/gl3.h.
 #ifndef GL_BGRA
