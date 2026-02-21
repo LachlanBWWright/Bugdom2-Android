@@ -335,6 +335,16 @@ static inline void bridge_TexGeni(GLenum coord, GLenum pname, GLint param)
 }
 #define glTexGeni           bridge_TexGeni
 
+// glLightModeli (stub – two-sided lighting not needed in GLES3 shader)
+#ifndef GL_LIGHT_MODEL_TWO_SIDE
+#define GL_LIGHT_MODEL_TWO_SIDE 0x0B52
+#endif
+static inline void bridge_LightModeli(GLenum pname, GLint param)
+{
+    (void)pname; (void)param;
+}
+#define glLightModeli bridge_LightModeli
+
 // Redirect unsupported enums / formats
 // These desktop-GL / extension constants are not defined by GLES3/gl3.h.
 #ifndef GL_BGRA
