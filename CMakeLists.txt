@@ -243,7 +243,9 @@ if(EMSCRIPTEN)
 	target_link_options(${GAME_TARGET} PRIVATE
 		-fexceptions
 		# ASYNCIFY enables blocking while(true) main loops in WebAssembly
+		# Stack size of 64KB handles deep game call stacks (default 4KB is too small)
 		-sASYNCIFY=1
+		-sASYNCIFY_STACK_SIZE=65536
 		# Memory: start with 128MB, allow growth up to 1GB
 		-sINITIAL_MEMORY=134217728
 		-sALLOW_MEMORY_GROWTH=1
