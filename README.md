@@ -6,7 +6,20 @@ This is a port of Pangea Software’s 2002 game **Bugdom 2** (the sequel to [Bug
 
 **Download the game for macOS, Windows and Linux here:** https://github.com/jorio/Bugdom2/releases
 
+**Play in your browser (WebAssembly):** See the [GitHub Pages](../../deployments/github-pages) deployment, or build it yourself — see [BUILD.md](BUILD.md).
+
 ![Bugdom 2 scene: Skip and Sam](illustration.webp)
+
+## WebAssembly / Level Editor Features
+
+This fork includes WebAssembly support and level editor tooling:
+
+- **`?level=N`** URL parameter (0–9): Start at a specific level, skipping all menus.
+- **`--level N`** command-line arg (desktop): Same behavior on native builds.
+- **JavaScript cheat API** (browser console): `gameAPI.setFenceCollisionEnabled(false)`, `gameAPI.winLevel()`, `gameAPI.fullHeal()`, and more.
+- **Level file override**: `Module.FS.writeFile('Data/Terrain/Level1_Garden.ter', bytes)` to load custom level data at runtime.
+
+See [BUILD.md](BUILD.md) for full documentation.
 
 ## Documentation
 
