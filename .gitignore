@@ -4,6 +4,9 @@ cache/
 extern/SDL*
 dist/
 
+# CodeQL analysis artifacts
+_codeql_detected_source_root
+
 # IDEs and OS-specific stuff
 .vs/
 .idea/
