@@ -7,6 +7,11 @@ dist/
 # CodeQL analysis artifacts
 _codeql_detected_source_root
 
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/
+
 # IDEs and OS-specific stuff
 .vs/
 .idea/
