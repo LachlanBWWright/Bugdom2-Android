@@ -1,5 +1,6 @@
 name: Make Release Builds
-
+# NOTE: To enable GitHub Pages deployment, go to
+# Settings > Pages > Source > GitHub Actions in the repository settings.
 on:
   push:
     branches:
@@ -256,6 +257,8 @@ jobs:
       - build-windows
       - build-wasm
       - build-android
+    # Note: build-macos is not listed here because it requires Apple signing secrets.
+    # macOS artifacts are uploaded separately and included if the build succeeded.
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -264,7 +267,7 @@ jobs:
 
       - name: Read game version
         run: |
-          VERSION=$(grep -m1 'set(GAME_VERSION' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          VERSION=$(grep -m1 'set(GAME_VERSION' CMakeLists.txt | grep -oP '(?<=")[0-9]+\.[0-9]+\.[0-9]+(?=")' )
           echo "GAME_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Download all build artifacts
