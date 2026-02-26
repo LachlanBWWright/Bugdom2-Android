@@ -271,7 +271,7 @@ jobs:
           echo "GAME_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.3
         with:
           path: release-artifacts/
 
