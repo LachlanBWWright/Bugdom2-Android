@@ -95,7 +95,7 @@ endif()
 
 add_subdirectory(extern/Pomme)
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ANDROID)
 	find_package(OpenGL REQUIRED)
 endif()
 
@@ -214,7 +214,7 @@ else()
 endif()
 
 # Link core dependencies
-if(EMSCRIPTEN)
+if(EMSCRIPTEN OR ANDROID)
 	target_link_libraries(${GAME_TARGET} PRIVATE Pomme)
 else()
 	target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
@@ -245,9 +245,10 @@ if(EMSCRIPTEN)
 		# ASYNCIFY enables blocking while(true) main loops in WebAssembly
 		-sASYNCIFY=1
 		-sASYNCIFY_IGNORE_INDIRECT=1
-		# Memory: start with 128MB, allow growth
+		# Memory: start with 128MB, allow growth up to 1GB
 		-sINITIAL_MEMORY=134217728
 		-sALLOW_MEMORY_GROWTH=1
+		-sMAXIMUM_MEMORY=1073741824
 		# WebGL/OpenGL ES support
 		-sFULL_ES2=1
 		-sUSE_WEBGL2=1

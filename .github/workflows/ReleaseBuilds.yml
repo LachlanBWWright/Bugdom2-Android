@@ -168,8 +168,9 @@ jobs:
           find /tmp/gh-pages-unzipped -mindepth 2 -maxdepth 2 -type f -exec cp {} /tmp/gh-pages/ \;
           # Verify that the main game files were extracted
           ls /tmp/gh-pages/Bugdom2.html /tmp/gh-pages/Bugdom2.wasm
-          # Copy landing page
+          # Copy landing page and Jekyll bypass
           cp docs/index.html /tmp/gh-pages/index.html
+          touch /tmp/gh-pages/.nojekyll
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -191,6 +192,54 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Android (NDK cross-compile check for arm64-v8a)
+  # ────────────────────────────────────────────────────────────────────────────
+  build-android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      SDL_VER: "3.2.8"
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'recursive'}
+
+      - name: Install CMake and build essentials
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential python3 wget
+
+      - name: Download SDL3 source
+        run: |
+          wget -q "https://libsdl.org/release/SDL3-${SDL_VER}.tar.gz" -O /tmp/SDL3.tar.gz
+          tar -xzf /tmp/SDL3.tar.gz -C /tmp
+          echo "SDL_SRC=/tmp/SDL3-${SDL_VER}" >> $GITHUB_ENV
+
+      - name: Build SDL3 for Android arm64-v8a
+        run: |
+          cmake -S "$SDL_SRC" -B "$SDL_SRC/build-android" \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_STATIC=ON \
+            -DSDL_SHARED=OFF \
+            -DCMAKE_INSTALL_PREFIX="$SDL_SRC/install-android"
+          cmake --build "$SDL_SRC/build-android" -j$(nproc)
+          cmake --install "$SDL_SRC/build-android"
+
+      - name: Cross-compile game for Android arm64-v8a
+        run: |
+          cmake -S . -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_STATIC=ON \
+            -DCMAKE_PREFIX_PATH="$SDL_SRC/install-android"
+          cmake --build build-android -j$(nproc)
+
   # ────────────────────────────────────────────────────────────────────────────
   # Create / update GitHub Release
   # ────────────────────────────────────────────────────────────────────────────
@@ -199,6 +248,7 @@ jobs:
       - build-linux-appimage
       - build-windows
       - build-wasm
+      - build-android
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
