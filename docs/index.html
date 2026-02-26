@@ -212,16 +212,19 @@
   <!-- ── JavaScript API ──────────────────────────────────────── -->
   <section>
     <h2>JavaScript Cheat / Debug API</h2>
-    <p>Open the browser console while the game is running and use these commands:</p>
-    <pre>// Disable fence collision (walk through fences)
-gameAPI.setFenceCollisionEnabled(false);
+    <p>Open the browser console while the game is running and use these commands via the <code>gameAPI</code> helper (initialized automatically when the game loads):</p>
+    <pre>// Fence collision
+gameAPI.setFenceCollisionEnabled(false);   // disable (walk through fences)
+gameAPI.setFenceCollisionEnabled(true);    // re-enable
+gameAPI.getFenceCollisionEnabled();         // query (returns true/false)
 
-// Re-enable fence collision
-gameAPI.setFenceCollisionEnabled(true);
+// Player health and lives
+Module.ccall('SetPlayerHealth', null, ['number'], [1.0]);   // full health (0.0–1.0)
+Module.ccall('SetPlayerLives',  null, ['number'], [9]);     // set lives count
+Module.ccall('FullHeal',        null, [], []);                // full health + lives + map
 
-// Query current state
-gameAPI.getFenceCollisionEnabled();   // returns true/false</pre>
-    <p style="margin-top:8px">The <code>gameAPI</code> object is initialized automatically once the game loads.</p>
+// Level control
+Module.ccall('WinLevel', null, [], []);       // immediately complete current level</pre>
   </section>
 
   <!-- ── Level File Override ─────────────────────────────────── -->
@@ -304,11 +307,23 @@ fetch('my_custom_level.ter')
             getFenceCollisionEnabled: function() {
               return M.ccall('GetFenceCollisionEnabled', 'number', [], []) !== 0;
             },
+            setPlayerHealth: function(h) {
+              M.ccall('SetPlayerHealth', null, ['number'], [h]);
+            },
+            setPlayerLives: function(n) {
+              M.ccall('SetPlayerLives', null, ['number'], [n]);
+            },
+            fullHeal: function() {
+              M.ccall('FullHeal', null, [], []);
+            },
+            winLevel: function() {
+              M.ccall('WinLevel', null, [], []);
+            },
             setStartLevel: function(n) {
               M.ccall('SetStartLevel', null, ['number'], [n]);
             }
           };
-          console.log('[Bugdom2] gameAPI ready. Try: gameAPI.setFenceCollisionEnabled(false)');
+          console.log('[Bugdom2] gameAPI ready. Commands: setFenceCollisionEnabled, setPlayerHealth, setPlayerLives, fullHeal, winLevel');
         } else if (++attempts < 100) {
           setTimeout(trySetupAPI, 200);
         }

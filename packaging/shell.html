@@ -44,13 +44,18 @@
       background: #000;
     }
 
-    #status-overlay {
+    #overlay {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
       pointer-events: none;
+    }
+
+    #overlay.clickable {
+      pointer-events: auto;
+      cursor: pointer;
     }
 
     #status {
@@ -77,6 +82,43 @@
       border-radius: 6px;
     }
 
+    #play-btn {
+      display: none;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: #2a7a2a;
+      border: 3px solid #6fbf6f;
+      font-size: 2.8em;
+      color: #d0ffd0;
+      margin: 0 auto 12px auto;
+      transition: transform 0.15s, background 0.15s;
+      line-height: 84px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #play-btn:hover {
+      transform: scale(1.1);
+      background: #3a9a3a;
+    }
+
+    #play-label {
+      display: none;
+      font-size: 1.2em;
+      color: #9fe09f;
+      margin-top: 6px;
+    }
+
+    #bg-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,8,0,0.80);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     #info {
       margin-top: 10px;
       font-size: 0.75em;
@@ -85,7 +127,7 @@
       max-width: 640px;
     }
 
-    #info a { color: #5a9f5a; }
+    code { color: #7abf7a; }
 
     .spinner {
       border: 3px solid #1a2a1a;
@@ -105,34 +147,44 @@
 
   <div id="canvas-container">
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="1"></canvas>
-    <div id="status-overlay">
-      <div class="spinner" id="spinner"></div>
-      <div id="status">Loading...</div>
-      <div id="progress-container">
-        <div id="progress"></div>
+    <div id="bg-overlay">
+      <div id="overlay">
+        <div class="spinner" id="spinner"></div>
+        <div id="play-btn">▶</div>
+        <div id="status">Loading...</div>
+        <div id="progress-container">
+          <div id="progress"></div>
+        </div>
+        <div id="play-label">Click to play</div>
       </div>
     </div>
   </div>
 
   <div id="info">
-    <b>URL parameters:</b>
-    <code>?level=N</code> (0–9) to skip menus and start at a specific level.
+    <b>URL params:</b>
+    <code>?level=N</code> (0–9) to start at a level directly.
     &nbsp;|&nbsp;
     <b>JS API:</b>
-    <code>Module.ccall('SetFenceCollisionEnabled', null, ['number'], [0])</code> to toggle fence collision.
+    <code>Module.ccall('SetFenceCollisionEnabled', null, ['number'], [0])</code>
     &nbsp;|&nbsp;
-    <b>Level file override:</b>
-    <code>Module.FS.writeFile('Data/Terrain/Level1_Garden.ter', bytes)</code> before a level loads.
+    <b>Override level files:</b>
+    <code>Module.FS.writeFile('Data/Terrain/Level1_Garden.ter', bytes)</code>
   </div>
 
   <script type="text/javascript">
-    var statusEl   = document.getElementById('status');
-    var progressEl = document.getElementById('progress');
-    var spinnerEl  = document.getElementById('spinner');
-    var overlayEl  = document.getElementById('status-overlay');
-    var canvas     = document.getElementById('canvas');
+    var statusEl     = document.getElementById('status');
+    var progressEl   = document.getElementById('progress');
+    var spinnerEl    = document.getElementById('spinner');
+    var overlayEl    = document.getElementById('overlay');
+    var bgOverlayEl  = document.getElementById('bg-overlay');
+    var playBtnEl    = document.getElementById('play-btn');
+    var playLabelEl  = document.getElementById('play-label');
+    var canvas       = document.getElementById('canvas');
 
-    // Resize canvas to fill the viewport sensibly
+    var loadingDone  = false;   // true once Emscripten finishes loading the .data file
+    var gameStarted  = false;   // true once main() has been called
+
+    // Resize canvas to fill viewport sensibly
     function resizeCanvas() {
       var maxW = Math.min(window.innerWidth - 24, 1280);
       var maxH = window.innerHeight - 160;
@@ -145,21 +197,44 @@
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
+    function showPlayButton() {
+      spinnerEl.style.display    = 'none';
+      statusEl.style.display     = 'none';
+      document.getElementById('progress-container').style.display = 'none';
+      playBtnEl.style.display    = 'block';
+      playLabelEl.style.display  = 'block';
+      overlayEl.classList.add('clickable');
+      overlayEl.onclick = startGame;
+      bgOverlayEl.style.cursor = 'pointer';
+      bgOverlayEl.onclick = startGame;
+    }
+
+    function startGame() {
+      if (gameStarted) return;
+      gameStarted = true;
+      bgOverlayEl.style.display = 'none';
+      canvas.focus();
+      // Call main() now that there has been user interaction (enables audio)
+      Module.callMain([]);
+    }
+
     var Module = {
       canvas: canvas,
 
-      print: function(text) { console.log('[Bugdom2]', text); },
+      // Prevent main() from running automatically; we call it after user clicks Play
+      noInitialRun: true,
+
+      print:    function(text) { console.log('[Bugdom2]', text); },
       printErr: function(text) { console.error('[Bugdom2]', text); },
 
       setStatus: function(text) {
         if (!text) {
-          // Loading complete – hide overlay
-          overlayEl.style.display = 'none';
-          canvas.focus();
+          // Loading complete – show Play button if not already started
+          loadingDone = true;
+          if (!gameStarted) showPlayButton();
           return;
         }
         statusEl.innerText = text;
-        // Parse "Downloading data... (X/Y)" style progress
         var m = text.match(/\((\d+)\/(\d+)\)/);
         if (m) {
           progressEl.style.width = (100 * parseInt(m[1]) / parseInt(m[2])) + '%';
@@ -167,19 +242,17 @@
       },
 
       monitorRunDependencies: function(left) {
-        if (left === 0) {
+        if (left === 0 && !loadingDone) {
+          // All dependencies resolved; setStatus('') will be called shortly
           spinnerEl.style.display = 'none';
         }
-      },
-
-      onRuntimeInitialized: function() {
-        // Runtime is ready; overlay will be hidden once setStatus('') is called.
       }
     };
 
     window.onerror = function(msg, url, line, col, err) {
       statusEl.innerText = 'Error: ' + msg;
       statusEl.style.color = '#ff6060';
+      playBtnEl.style.display = 'none';
       spinnerEl.style.display = 'none';
     };
   </script>

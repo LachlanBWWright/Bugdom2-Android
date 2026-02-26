@@ -459,11 +459,29 @@ class EmscriptenProject(Project):
 
     def _find_emcmake(self):
         """Locate the emcmake wrapper that ships with emsdk."""
-        # Common locations: PATH, emsdk in home, or common install dirs
-        for candidate in ["emcmake", os.path.expanduser("~/emsdk/upstream/emscripten/emcmake")]:
-            resolved = shutil.which(candidate)
-            if resolved:
-                return resolved
+        # 1. Check PATH first (works when emsdk_env.sh has been sourced)
+        resolved = shutil.which("emcmake")
+        if resolved:
+            return resolved
+
+        # 2. Check the EMSDK environment variable (set by emsdk_env.sh/bat)
+        emsdk_root = os.environ.get("EMSDK", "")
+        if emsdk_root:
+            for candidate in [
+                os.path.join(emsdk_root, "upstream", "emscripten", "emcmake"),
+                os.path.join(emsdk_root, "upstream", "emscripten", "emcmake.bat"),
+            ]:
+                if os.path.isfile(candidate):
+                    return candidate
+
+        # 3. Common default install locations
+        for candidate in [
+            os.path.expanduser("~/emsdk/upstream/emscripten/emcmake"),
+            os.path.expanduser("~\\emsdk\\upstream\\emscripten\\emcmake.bat"),
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
+
         die("emcmake not found. Please install and activate the Emscripten SDK:\n"
             "  git clone https://github.com/emscripten-core/emsdk.git\n"
             "  ./emsdk/emsdk install latest\n"

@@ -166,6 +166,8 @@ jobs:
           unzip "dist/$WASM_ARTIFACT_NAME" -d /tmp/gh-pages-unzipped
           # The zip contains a subdirectory; copy its contents to the pages root
           find /tmp/gh-pages-unzipped -mindepth 2 -maxdepth 2 -type f -exec cp {} /tmp/gh-pages/ \;
+          # Verify that the main game files were extracted
+          ls /tmp/gh-pages/Bugdom2.html /tmp/gh-pages/Bugdom2.wasm
           # Copy landing page
           cp docs/index.html /tmp/gh-pages/index.html
 
@@ -231,7 +233,7 @@ jobs:
 
             **WebAssembly features:**
             - URL parameter `?level=N` (0–9) to skip menus and start at a specific level
-            - JavaScript API: `gameAPI.setFenceCollisionEnabled(false)` to disable fence collision
+            - JavaScript API: `gameAPI.setFenceCollisionEnabled(false)`, `gameAPI.winLevel()`, `gameAPI.fullHeal()`
             - Level file override via `Module.FS.writeFile('Data/Terrain/...', bytes)`
           prerelease: true
           files: release-artifacts/**/*

@@ -139,6 +139,12 @@ When running in the browser, the game supports these developer/editor features:
 
   // Set the level to start at (before the game loads)
   Module.ccall('SetStartLevel', null, ['number'], [5]);
+
+  // Player helper functions (while in-game)
+  Module.ccall('SetPlayerHealth', null, ['number'], [1.0]);  // full health (0.0–1.0)
+  Module.ccall('SetPlayerLives',  null, ['number'], [9]);    // set lives count
+  Module.ccall('FullHeal',        null, [], []);               // max health + lives + map
+  Module.ccall('WinLevel',        null, [], []);               // immediately complete the level
   ```
 
 ### Desktop level editor features

@@ -254,7 +254,7 @@ if(EMSCRIPTEN)
 		# Bundle game data into a .data file served alongside the .wasm
 		--preload-file "${CMAKE_SOURCE_DIR}/Data@/Data"
 		# Export C functions callable from JavaScript
-		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetStartLevel"
+		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetPlayerHealth,_SetPlayerLives,_FullHeal,_WinLevel,_SetStartLevel"
 		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS"
 		# Custom HTML shell with game canvas and JS API
 		--shell-file "${EMSCRIPTEN_SHELL}"
