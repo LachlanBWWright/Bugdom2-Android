@@ -255,6 +255,8 @@ if(EMSCRIPTEN)
 		-sUSE_WEBGL2=1
 		# Bundle game data into a .data file served alongside the .wasm
 		--preload-file "${CMAKE_SOURCE_DIR}/Data@/Data"
+		# Optimize for web-only delivery (removes Node.js compatibility shims)
+		-sENVIRONMENT=web
 		# Export C functions callable from JavaScript
 		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetPlayerHealth,_SetPlayerLives,_FullHeal,_WinLevel,_SetStartLevel"
 		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS"
