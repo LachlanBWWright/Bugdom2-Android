@@ -451,8 +451,9 @@ class EmscriptenProject(Project):
         self.build_configs = ["Release"]
 
         # SDL source directory used when building SDL from source for Emscripten
-        self.sdl_source_dir = f"{libs_dir}/SDL3-{sdl_ver}"
-        self.sdl_prefix_dir = f"{self.sdl_source_dir}/install-wasm"
+        # Use a separate directory from the Linux build to avoid conflicts
+        self.sdl_source_dir = f"{libs_dir}/SDL3-{sdl_ver}-emscripten"
+        self.sdl_prefix_dir = f"{self.sdl_source_dir}/install"
 
     def get_artifact_name(self):
         return f"{game_name}-{game_ver}-wasm.zip"
@@ -493,14 +494,18 @@ class EmscriptenProject(Project):
         """Download and build SDL3 from source using Emscripten."""
         emcmake = self._find_emcmake()
 
-        sdl_build_dir = f"{self.sdl_source_dir}/build-wasm"
+        sdl_build_dir = f"{self.sdl_source_dir}/build"
         rmtree_if_exists(self.sdl_source_dir)
 
         sdl_zip_path = get_package(f"https://libsdl.org/release/SDL3-{sdl_ver}.tar.gz")
+        # Extract to a separate temp dir then rename to avoid conflicts with other platform builds
+        sdl_extract_dir = f"{libs_dir}/SDL3-{sdl_ver}"
+        rmtree_if_exists(sdl_extract_dir)
         shutil.unpack_archive(sdl_zip_path, libs_dir)
+        shutil.move(sdl_extract_dir, self.sdl_source_dir)
 
         with chdir(self.sdl_source_dir):
-            call([emcmake, "cmake", "-S", ".", "-B", "build-wasm",
+            call([emcmake, "cmake", "-S", ".", "-B", "build",
                   f"-DCMAKE_INSTALL_PREFIX={self.sdl_prefix_dir}",
                   "-DCMAKE_BUILD_TYPE=Release",
                   "-DSDL_STATIC=ON",
