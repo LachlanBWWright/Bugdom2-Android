@@ -122,7 +122,10 @@ long		createdDirID;
 
 	if (iErr != noErr)
 	{
+#ifndef __EMSCRIPTEN__
+		// On Emscripten there is no persistent prefs folder; suppress the alert
 		DoAlert("Warning: Cannot locate the Preferences folder.");
+#endif
 		return iErr;
 	}
 

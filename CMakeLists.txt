@@ -244,7 +244,6 @@ if(EMSCRIPTEN)
 		-fexceptions
 		# ASYNCIFY enables blocking while(true) main loops in WebAssembly
 		-sASYNCIFY=1
-		-sASYNCIFY_IGNORE_INDIRECT=1
 		# Memory: start with 128MB, allow growth up to 1GB
 		-sINITIAL_MEMORY=134217728
 		-sALLOW_MEMORY_GROWTH=1
