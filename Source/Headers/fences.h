@@ -22,6 +22,8 @@ typedef struct
 
 //============================================
 
+extern Boolean gDisableFenceCollision;
+
 void PrimeFences(void);
 Boolean DoFenceCollision(ObjNode *theNode);
 void DisposeFences(void);

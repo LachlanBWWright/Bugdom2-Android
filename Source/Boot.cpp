@@ -9,6 +9,11 @@
 #include "PommeInit.h"
 #include "PommeFiles.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 extern "C"
 {
 	#include "game.h"
@@ -16,6 +21,10 @@ extern "C"
 	SDL_Window* gSDLWindow = nullptr;
 	FSSpec gDataSpec;
 	int gCurrentAntialiasingLevel;
+
+	// Level editor / developer features
+	int gStartLevel = -1;					// -1 = normal startup; >=0 = skip menus and load this level directly
+	char gLevelOverrideDir[512] = "";		// if non-empty, files in this directory override Data/ files
 }
 
 static fs::path FindGameData(const char* executablePath)
@@ -78,6 +87,32 @@ static void Boot(int argc, char** argv)
 	SDL_SetLogPriorities(SDL_LOG_PRIORITY_INFO);
 #endif
 
+	// Parse command-line arguments for level editor / developer features
+	for (int i = 1; i < argc; i++)
+	{
+		if (SDL_strcmp(argv[i], "--level") == 0 && i + 1 < argc)
+		{
+			gStartLevel = SDL_atoi(argv[i + 1]);
+			i++;
+		}
+		else if (SDL_strcmp(argv[i], "--level-override-dir") == 0 && i + 1 < argc)
+		{
+			SDL_strlcpy(gLevelOverrideDir, argv[i + 1], sizeof(gLevelOverrideDir));
+			i++;
+		}
+	}
+
+#ifdef __EMSCRIPTEN__
+	// Read URL parameters for level editor features (e.g., ?level=3)
+	gStartLevel = EM_ASM_INT({
+		var urlParams = new URLSearchParams(window.location.search);
+		var level = urlParams.get('level');
+		return (level !== null) ? parseInt(level) : -1;
+	});
+	if (gStartLevel < 0 || gStartLevel >= NUM_LEVELS)
+		gStartLevel = -1;
+#endif
+
 	// Start our "machine"
 	Pomme::Init();
 
@@ -96,9 +131,16 @@ retryVideo:
 	}
 
 	// Create window
+#ifdef __EMSCRIPTEN__
+	// WebGL requires OpenGL ES 2.0 context profile
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#else
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
 
 	gCurrentAntialiasingLevel = gGamePrefs.antialiasingLevel;
 	if (gCurrentAntialiasingLevel != 0)

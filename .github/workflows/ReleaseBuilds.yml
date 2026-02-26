@@ -1,17 +1,30 @@
 name: Make Release Builds
 
-on: [workflow_dispatch]
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Linux AppImage (x86_64 and aarch64)
+  # ────────────────────────────────────────────────────────────────────────────
   build-linux-appimage:
     runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: 5
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         platform:  # Use oldest available Ubuntu for maximum glibc compatibility
-          - { name: x86_64, os: ubuntu-22.04 }
-          - { name: aarch64, os: ubuntu-22.04-arm }
+          - { name: x86_64,   os: ubuntu-22.04 }
+          - { name: aarch64,  os: ubuntu-22.04-arm }
     steps:
       - uses: actions/checkout@v4
         with: {submodules: 'recursive'}
@@ -38,9 +51,12 @@ jobs:
           path: dist/
           compression-level: 0
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # Windows
+  # ────────────────────────────────────────────────────────────────────────────
   build-windows:
     runs-on: windows-2022
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: {submodules: 'recursive'}
@@ -57,9 +73,12 @@ jobs:
           path: dist/
           compression-level: 0
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # macOS
+  # ────────────────────────────────────────────────────────────────────────────
   build-macos:
     runs-on: macos-latest  # as of January 2025, this still supports the macOS 10.13 deployment target
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CODE_SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
     steps:
@@ -86,3 +105,136 @@ jobs:
           name: ${{env.ARTIFACT_NAME}}
           path: dist/
           compression-level: 0
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # WebAssembly (Emscripten)
+  # ────────────────────────────────────────────────────────────────────────────
+  build-wasm:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'recursive'}
+
+      - name: Install CMake and build essentials
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential python3
+
+      - name: Install Emscripten SDK
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk
+          /tmp/emsdk/emsdk install latest
+          /tmp/emsdk/emsdk activate latest
+
+      - name: Get WASM artifact name
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          echo "WASM_ARTIFACT_NAME=$(python3 build.py --emscripten --print-artifact-name)" >> $GITHUB_ENV
+
+      - name: Build SDL3 for Emscripten
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --dependencies
+
+      - name: Configure
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --configure
+
+      - name: Build
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --build
+
+      - name: Package
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{env.WASM_ARTIFACT_NAME}}
+          path: dist/
+          compression-level: 0
+
+      # Prepare GitHub Pages content (game files + landing page)
+      - name: Prepare GitHub Pages content
+        run: |
+          mkdir -p /tmp/gh-pages
+          # Unzip WASM bundle into pages dir
+          unzip "dist/$WASM_ARTIFACT_NAME" -d /tmp/gh-pages-unzipped
+          # The zip contains a subdirectory; copy its contents to the pages root
+          find /tmp/gh-pages-unzipped -mindepth 2 -maxdepth 2 -type f -exec cp {} /tmp/gh-pages/ \;
+          # Copy landing page
+          cp docs/index.html /tmp/gh-pages/index.html
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/gh-pages
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Deploy to GitHub Pages
+  # ────────────────────────────────────────────────────────────────────────────
+  deploy-pages:
+    needs: build-wasm
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Create / update GitHub Release
+  # ────────────────────────────────────────────────────────────────────────────
+  create-release:
+    needs:
+      - build-linux-appimage
+      - build-windows
+      - build-wasm
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'false'}
+
+      - name: Read game version
+        run: |
+          VERSION=$(grep -m1 'set(GAME_VERSION' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          echo "GAME_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts/
+
+      - name: List artifacts
+        run: ls -lR release-artifacts/
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.GAME_VERSION }}-dev
+          name: "Bugdom 2 v${{ env.GAME_VERSION }} (latest build)"
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            **Downloads:**
+            - 🐧 Linux x86_64 / aarch64 AppImage
+            - 🪟 Windows x64 ZIP
+            - 🌐 WebAssembly ZIP (play in the browser via GitHub Pages at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)
+
+            **WebAssembly features:**
+            - URL parameter `?level=N` (0–9) to skip menus and start at a specific level
+            - JavaScript API: `gameAPI.setFenceCollisionEnabled(false)` to disable fence collision
+            - Level file override via `Module.FS.writeFile('Data/Terrain/...', bytes)`
+          prerelease: true
+          files: release-artifacts/**/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

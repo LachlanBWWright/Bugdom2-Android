@@ -95,7 +95,9 @@ endif()
 
 add_subdirectory(extern/Pomme)
 
-find_package(OpenGL REQUIRED)
+if(NOT EMSCRIPTEN)
+	find_package(OpenGL REQUIRED)
+endif()
 
 #------------------------------------------------------------------------------
 # EXECUTABLE TARGET
@@ -117,6 +119,9 @@ if(WIN32)
 elseif(APPLE)
 	list(APPEND GAME_SOURCES ${CMAKE_SOURCE_DIR}/packaging/${GAME_TARGET}.icns)
 	set_source_files_properties(${CMAKE_SOURCE_DIR}/packaging/${GAME_TARGET}.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+elseif(EMSCRIPTEN)
+	# WebInterface.c provides Emscripten-exported cheat/debug functions
+	# (already included via GLOB_RECURSE above, but note this for clarity)
 endif()
 
 add_executable(${GAME_TARGET} ${GAME_SOURCES})
@@ -209,11 +214,51 @@ else()
 endif()
 
 # Link core dependencies
-target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+if(EMSCRIPTEN)
+	target_link_libraries(${GAME_TARGET} PRIVATE Pomme)
+else()
+	target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+endif()
 
 # Add required frameworks for KillMacMouseAcceleration
 if(APPLE)
 	target_link_libraries(${GAME_TARGET} PRIVATE "-framework Foundation" "-framework IOKit")
+endif()
+
+#------------------------------------------------------------------------------
+# EMSCRIPTEN/WEBASSEMBLY OPTIONS
+#------------------------------------------------------------------------------
+
+if(EMSCRIPTEN)
+	# Emscripten output is Bugdom2.html + Bugdom2.js + Bugdom2.wasm + Bugdom2.data
+	set_target_properties(${GAME_TARGET} PROPERTIES SUFFIX ".html")
+
+	# Use custom HTML shell
+	set(EMSCRIPTEN_SHELL "${CMAKE_SOURCE_DIR}/packaging/shell.html")
+
+	target_compile_options(${GAME_TARGET} PRIVATE
+		-fexceptions
+	)
+
+	target_link_options(${GAME_TARGET} PRIVATE
+		-fexceptions
+		# ASYNCIFY enables blocking while(true) main loops in WebAssembly
+		-sASYNCIFY=1
+		-sASYNCIFY_IGNORE_INDIRECT=1
+		# Memory: start with 128MB, allow growth
+		-sINITIAL_MEMORY=134217728
+		-sALLOW_MEMORY_GROWTH=1
+		# WebGL/OpenGL ES support
+		-sFULL_ES2=1
+		-sUSE_WEBGL2=1
+		# Bundle game data into a .data file served alongside the .wasm
+		--preload-file "${CMAKE_SOURCE_DIR}/Data@/Data"
+		# Export C functions callable from JavaScript
+		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetStartLevel"
+		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS"
+		# Custom HTML shell with game canvas and JS API
+		--shell-file "${EMSCRIPTEN_SHELL}"
+	)
 endif()
 
 #------------------------------------------------------------------------------

@@ -1050,6 +1050,16 @@ unsigned long	someLong;
 	// Load some global sprites
 	PreloadGlobalSprites();
 
+	extern int gStartLevel;
+
+	if (gStartLevel >= 0 && gStartLevel < NUM_LEVELS)
+	{
+		// Skip title/menus and jump directly to the specified level (level editor mode)
+		gLevelNum = gStartLevel;
+		PlayGame();
+		return;
+	}
+
 #if !SKIPFLUFF
 		/* SHOW TITLES */
 
