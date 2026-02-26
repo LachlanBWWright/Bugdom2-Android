@@ -120,6 +120,44 @@ static void Boot(int argc, char** argv)
 	const char* executablePath = argc > 0 ? argv[0] : NULL;
 	fs::path dataPath = FindGameData(executablePath);
 
+#if !defined(__EMSCRIPTEN__)
+	// Apply level file overrides from --level-override-dir (desktop builds only).
+	// For Emscripten, use Module.FS.writeFile('Data/...', bytes) from JavaScript instead.
+	if (gLevelOverrideDir[0] != '\0')
+	{
+		fs::path overrideDir(gLevelOverrideDir);
+		if (fs::is_directory(overrideDir))
+		{
+			// Walk override dir and copy each file to the matching location under dataPath/
+			for (auto& entry : fs::recursive_directory_iterator(overrideDir))
+			{
+				if (!entry.is_regular_file())
+					continue;
+
+				// Compute relative path within override dir, then mirror it in dataPath
+				auto relPath = fs::relative(entry.path(), overrideDir);
+				fs::path destFile = dataPath / relPath;
+
+				// Only override files that exist in the game data (safety check)
+				if (fs::exists(destFile))
+				{
+					fs::copy_file(entry.path(), destFile, fs::copy_options::overwrite_existing);
+					SDL_Log("Level override applied: %s", destFile.u8string().c_str());
+				}
+				else
+				{
+					SDL_Log("Level override skipped (no matching data file): %s", relPath.u8string().c_str());
+				}
+			}
+		}
+		else
+		{
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+				"--level-override-dir path is not a directory: %s", gLevelOverrideDir);
+		}
+	}
+#endif
+
 	// Load game prefs before starting
 	LoadPrefs();
 

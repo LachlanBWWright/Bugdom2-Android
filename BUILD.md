@@ -73,3 +73,83 @@ If you want to build the game **manually** instead, the rest of this document de
     ```
     If you'd like to enable runtime sanitizers, append `-DSANITIZE=1` to the **first** `cmake` call above.
 1. The game gets built in `build/Bugdom2`. Enjoy!
+
+## How to build for WebAssembly (Emscripten)
+
+1. Install the prerequisites:
+    - [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) (emsdk)
+    - CMake 3.21+
+    - Python 3
+
+1. Clone the repo **recursively**:
+    ```
+    git clone --recurse-submodules https://github.com/LachlanBWWright/Bugdom2-Android
+    cd Bugdom2-Android
+    ```
+
+1. Activate the Emscripten SDK:
+    ```
+    # Replace with your actual emsdk path
+    source ~/emsdk/emsdk_env.sh
+    ```
+
+1. Build the game using `build.py`:
+    ```
+    python3 build.py --emscripten
+    ```
+    This will:
+    - Download and build SDL3 from source using Emscripten
+    - Configure and build the WASM bundle
+    - Package it into `dist/Bugdom2-X.Y.Z-wasm.zip`
+
+1. The WASM output (`Bugdom2.html`, `Bugdom2.js`, `Bugdom2.wasm`, `Bugdom2.data`) will be in `build/`.
+
+    To test locally (a web server is required — browsers block WASM loading from `file://`):
+    ```
+    cd build
+    python3 -m http.server 8080
+    # Then open http://localhost:8080/Bugdom2.html
+    ```
+
+### WebAssembly level editor features
+
+When running in the browser, the game supports these developer/editor features:
+
+- **Jump to level**: Add `?level=N` (0–9) to the URL to skip menus and load a specific level directly.  
+  Example: `http://localhost:8080/Bugdom2.html?level=3`
+
+- **Level file override**: Before the level loads, write custom files into the virtual filesystem from JavaScript:
+  ```javascript
+  // Override a terrain file
+  fetch('my_custom_level.ter')
+    .then(r => r.arrayBuffer())
+    .then(buf => Module.FS.writeFile('Data/Terrain/Level1_Garden.ter', new Uint8Array(buf)));
+  ```
+
+- **JavaScript cheat API**: The following functions are exported to JavaScript for testing/debugging:
+  ```javascript
+  // Disable fence collision (walk through fences)
+  Module.ccall('SetFenceCollisionEnabled', null, ['number'], [0]);
+
+  // Re-enable fence collision
+  Module.ccall('SetFenceCollisionEnabled', null, ['number'], [1]);
+
+  // Query fence collision state (returns 1=enabled, 0=disabled)
+  Module.ccall('GetFenceCollisionEnabled', 'number', [], []);
+
+  // Set the level to start at (before the game loads)
+  Module.ccall('SetStartLevel', null, ['number'], [5]);
+  ```
+
+### Desktop level editor features
+
+The same level-jump feature is available on desktop via command-line arguments:
+
+```
+# Jump to level 3 (Fido level) directly
+./Bugdom2 --level 3
+
+# Jump to level 0 with custom level files from a directory
+# Files in the override dir replace matching files in Data/ by name
+./Bugdom2 --level 0 --level-override-dir /path/to/my/custom/levels/
+```

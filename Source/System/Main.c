@@ -1026,6 +1026,10 @@ unsigned long	someLong;
 				/* INIT PREFERENCES */
 
 	LoadPrefs();
+#ifdef __EMSCRIPTEN__
+	// Fullscreen in the browser requires user interaction; run windowed in the canvas
+	gGamePrefs.fullscreen = false;
+#endif
 	MoveToPreferredDisplay();
 	SetFullscreenMode(true);
 
