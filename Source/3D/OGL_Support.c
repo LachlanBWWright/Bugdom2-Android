@@ -791,6 +791,10 @@ GLuint	textureName;
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 			free(rgba);
 		}
+		else
+		{
+			SDL_Log("OGL: out of memory converting ARGB1555 texture (%dx%d)", width, height);
+		}
 	}
 	else
 	{

@@ -129,4 +129,42 @@ test.describe('Bugdom 2 GitHub Pages landing page', () => {
     await expect(overlay).toBeVisible();
   });
 
+  test('Bugdom2.html game shell is accessible when present', async ({ request }) => {
+    const resp = await request.get(BASE_URL + '/Bugdom2.html');
+    if (resp.status() === 404) {
+      // Game files are only available after CI build; skip gracefully
+      test.skip(true, 'Bugdom2.html not yet deployed – skipping game-shell test');
+    }
+    expect(resp.status()).toBe(200);
+    const body = await resp.text();
+    // The Emscripten shell HTML must declare a canvas element
+    expect(body).toContain('<canvas');
+  });
+
+  test('Bugdom2.wasm is accessible when present', async ({ request }) => {
+    const resp = await request.get(BASE_URL + '/Bugdom2.wasm');
+    if (resp.status() === 404) {
+      test.skip(true, 'Bugdom2.wasm not yet deployed – skipping WASM file test');
+    }
+    expect(resp.status()).toBe(200);
+    // WASM files start with the magic bytes \0asm
+    const buf = await resp.body();
+    expect(buf[0]).toBe(0x00);
+    expect(buf[1]).toBe(0x61); // 'a'
+    expect(buf[2]).toBe(0x73); // 's'
+    expect(buf[3]).toBe(0x6d); // 'm'
+  });
+
+  test('Bugdom2.js loader is accessible when present', async ({ request }) => {
+    const resp = await request.get(BASE_URL + '/Bugdom2.js');
+    if (resp.status() === 404) {
+      test.skip(true, 'Bugdom2.js not yet deployed – skipping loader test');
+    }
+    expect(resp.status()).toBe(200);
+    const body = await resp.text();
+    // Emscripten-generated loader should reference the WASM file
+    expect(body).toContain('Bugdom2.wasm');
+  });
+
 });
+

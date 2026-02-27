@@ -524,11 +524,14 @@ class EmscriptenProject(Project):
 
         env = os.environ.copy()
 
+        # Use SDL3_DIR to explicitly point to the SDL3 cmake config
+        # (CMAKE_PREFIX_PATH alone doesn't work with the Emscripten toolchain)
+        sdl3_cmake_dir = os.path.join(self.sdl_prefix_dir, "lib", "cmake", "SDL3")
         call([emcmake, "cmake", "-S", ".", "-B", self.dir_name,
               "-DCMAKE_BUILD_TYPE=Release",
               "-DBUILD_SDL_FROM_SOURCE=OFF",
               "-DSDL_STATIC=ON",
-              f"-DCMAKE_PREFIX_PATH={self.sdl_prefix_dir}"],
+              f"-DSDL3_DIR={sdl3_cmake_dir}"],
              env=env)
 
     def build(self):

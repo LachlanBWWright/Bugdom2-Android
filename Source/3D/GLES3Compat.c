@@ -13,6 +13,11 @@
 #include <string.h>
 #include <math.h>
 #include <stdbool.h>
+
+// Ensure M_PI is available (not guaranteed by all compilers/platforms)
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include <stddef.h>   // offsetof
 #include <stdio.h>    // printf fallback
 
@@ -211,7 +216,7 @@ static bool  gLightEnabled[4]    = {false,false,false,false};
 static float gLightDir[4][3];    // eye-space direction
 static float gLightDiff[4][4];
 static float gAmbientColor[4]    = {0.2f,0.2f,0.2f,1.0f};
-static int   gNumLights          = 0;
+// Number of active lights is computed dynamically in UploadUniforms()
 
 //=============================================================
 // Fog state
@@ -694,7 +699,7 @@ void glScalef(GLfloat x, GLfloat y, GLfloat z)
 
 void glRotatef(GLfloat angleDeg, GLfloat ax, GLfloat ay, GLfloat az)
 {
-    float rad = angleDeg * (3.14159265358979323846f / 180.0f);
+    float rad = angleDeg * ((float)M_PI / 180.0f);
     float c   = cosf(rad);
     float s   = sinf(rad);
 
