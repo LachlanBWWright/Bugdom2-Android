@@ -572,7 +572,7 @@ if __name__ == "__main__":
     # Set up project metadata
 
     if args.emscripten:
-        project = EmscriptenProject(build_dir)
+        project = EmscriptenProject(os.path.join(root_dir, "build-wasm"))
     elif SYSTEM == "Windows":
         project = WindowsProject(build_dir)
 

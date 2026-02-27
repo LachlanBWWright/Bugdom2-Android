@@ -2,8 +2,13 @@
 
 #include "Pomme.h"
 #include <SDL3/SDL.h>
+
+#ifdef __EMSCRIPTEN__
+#include "gles3compat.h"
+#else
 #include <SDL3/SDL_opengl.h>
 #include <SDL3/SDL_opengl_glext.h>
+#endif
 #include <stdint.h>
 
 #if !defined(__LITTLE_ENDIAN__) && !(__BIG_ENDIAN__)
