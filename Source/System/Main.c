@@ -122,7 +122,10 @@ long		createdDirID;
 
 	if (iErr != noErr)
 	{
+#ifndef __EMSCRIPTEN__
+		// On Emscripten there is no persistent prefs folder; suppress the alert
 		DoAlert("Warning: Cannot locate the Preferences folder.");
+#endif
 		return iErr;
 	}
 
@@ -1026,6 +1029,10 @@ unsigned long	someLong;
 				/* INIT PREFERENCES */
 
 	LoadPrefs();
+#ifdef __EMSCRIPTEN__
+	// Fullscreen in the browser requires user interaction; run windowed in the canvas
+	gGamePrefs.fullscreen = false;
+#endif
 	MoveToPreferredDisplay();
 	SetFullscreenMode(true);
 
@@ -1049,6 +1056,16 @@ unsigned long	someLong;
 
 	// Load some global sprites
 	PreloadGlobalSprites();
+
+	extern int gStartLevel;
+
+	if (gStartLevel >= 0 && gStartLevel < NUM_LEVELS)
+	{
+		// Skip title/menus and jump directly to the specified level (level editor mode)
+		gLevelNum = gStartLevel;
+		PlayGame();
+		return;
+	}
 
 #if !SKIPFLUFF
 		/* SHOW TITLES */

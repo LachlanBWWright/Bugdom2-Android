@@ -129,14 +129,22 @@ void OGL_Boot(void)
 			/* GET GL PROCEDURES */
 			// Necessary on Windows
 
+#ifdef __EMSCRIPTEN__
+	gGlActiveTextureProc       = (PFNGLACTIVETEXTUREPROC)          SDL_GL_GetProcAddress("glActiveTexture");
+	GAME_ASSERT(gGlActiveTextureProc);
+	gGlClientActiveTextureProc = (PFNGLCLIENTACTIVETEXTUREARBPROC) glClientActiveTexture;
+	GLES3Compat_Init();
+#else
 	gGlActiveTextureProc = (PFNGLACTIVETEXTUREPROC) SDL_GL_GetProcAddress("glActiveTexture");
 	GAME_ASSERT(gGlActiveTextureProc);
 
 	gGlClientActiveTextureProc = (PFNGLCLIENTACTIVETEXTUREARBPROC) SDL_GL_GetProcAddress("glClientActiveTexture");
 	GAME_ASSERT(gGlClientActiveTextureProc);
+#endif
 
 	OGL_CheckError();
 }
+
 
 
 /*********************** OGL: NEW VIEW DEF **********************/
@@ -758,11 +766,42 @@ GLuint	textureName;
 	OGL_CheckError();
 
 
-				/* LOAD TEXTURE AND/OR MIPMAPS */
+			/* LOAD TEXTURE AND/OR MIPMAPS */
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+#ifdef __EMSCRIPTEN__
+	// GLES3/WebGL2: convert legacy 16-bit ARGB1555 to 32-bit RGBA8 before upload
+	if (dataType == GL_UNSIGNED_SHORT_1_5_5_5_REV)
+	{
+		int nPixels = width * height;
+		uint8_t* rgba = (uint8_t*) malloc((size_t)(nPixels * 4));
+		if (rgba)
+		{
+			const uint16_t* src = (const uint16_t*) imageMemory;
+			for (int pi = 0; pi < nPixels; pi++)
+			{
+				uint16_t p = src[pi];
+				rgba[pi*4+0] = (uint8_t)(((p >> 10) & 0x1F) * 255 / 31);  // R
+				rgba[pi*4+1] = (uint8_t)(((p >>  5) & 0x1F) * 255 / 31);  // G
+				rgba[pi*4+2] = (uint8_t)(((p >>  0) & 0x1F) * 255 / 31);  // B
+				rgba[pi*4+3] = (p & 0x8000) ? 255 : 0;                     // A
+			}
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+			free(rgba);
+		}
+		else
+		{
+			SDL_Log("OGL: out of memory converting ARGB1555 texture (%dx%d)", width, height);
+		}
+	}
+	else
+	{
+		GLint uploadSrcFmt = (srcFormat == (GLint)0x80E1 /* GL_BGRA_EXT */) ? GL_RGBA : srcFormat;
+		glTexImage2D(GL_TEXTURE_2D, 0, destFormat, width, height, 0, uploadSrcFmt, dataType, imageMemory);
+	}
+#else
 	glTexImage2D(GL_TEXTURE_2D,
 				0,										// mipmap level
 				destFormat,								// format in OpenGL
@@ -772,6 +811,7 @@ GLuint	textureName;
 				srcFormat,								// what my format is
 				dataType,								// size of each r,g,b
 				imageMemory);							// pointer to the actual texture pixels
+#endif
 
 
 			/* SEE IF RAN OUT OF MEMORY WHILE COPYING TO OPENGL */

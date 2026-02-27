@@ -60,6 +60,7 @@ enum
 int				gNumFences = 0;
 int				gNumFencesDrawn = 0;
 FenceDefType	*gFenceList = nil;
+Boolean			gDisableFenceCollision = false;
 
 
 static const short gFenceTexture[NUM_FENCE_TYPES][2] =
@@ -715,6 +716,9 @@ OGLVector2D		lineNormal;
 double			radius;
 double			oldX,oldZ,newX,newZ;
 Boolean			hit = false,letGoOver = false, letGoUnder = false;
+
+	if (gDisableFenceCollision)
+		return false;
 
 			/* CALC MY MOTION LINE SEGMENT */
 

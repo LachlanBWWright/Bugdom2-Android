@@ -1,17 +1,31 @@
 name: Make Release Builds
+# NOTE: To enable GitHub Pages deployment, go to
+# Settings > Pages > Source > GitHub Actions in the repository settings.
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
 
-on: [workflow_dispatch]
+permissions:
+  contents: write
 
 jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Linux AppImage (x86_64 and aarch64)
+  # ────────────────────────────────────────────────────────────────────────────
   build-linux-appimage:
     runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: 5
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         platform:  # Use oldest available Ubuntu for maximum glibc compatibility
-          - { name: x86_64, os: ubuntu-22.04 }
-          - { name: aarch64, os: ubuntu-22.04-arm }
+          - { name: x86_64,   os: ubuntu-22.04 }
+          - { name: aarch64,  os: ubuntu-22.04-arm }
     steps:
       - uses: actions/checkout@v4
         with: {submodules: 'recursive'}
@@ -38,9 +52,12 @@ jobs:
           path: dist/
           compression-level: 0
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # Windows
+  # ────────────────────────────────────────────────────────────────────────────
   build-windows:
     runs-on: windows-2022
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with: {submodules: 'recursive'}
@@ -57,9 +74,12 @@ jobs:
           path: dist/
           compression-level: 0
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # macOS
+  # ────────────────────────────────────────────────────────────────────────────
   build-macos:
     runs-on: macos-latest  # as of January 2025, this still supports the macOS 10.13 deployment target
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CODE_SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
     steps:
@@ -86,3 +106,235 @@ jobs:
           name: ${{env.ARTIFACT_NAME}}
           path: dist/
           compression-level: 0
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # WebAssembly (Emscripten)
+  # ────────────────────────────────────────────────────────────────────────────
+  build-wasm:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'recursive'}
+
+      - name: Install CMake and build essentials
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential python3
+
+      - name: Install Emscripten SDK
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk
+          /tmp/emsdk/emsdk install latest
+          /tmp/emsdk/emsdk activate latest
+
+      - name: Get WASM artifact name
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          echo "WASM_ARTIFACT_NAME=$(python3 build.py --emscripten --print-artifact-name)" >> $GITHUB_ENV
+
+      - name: Build SDL3 for Emscripten
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --dependencies
+
+      - name: Configure
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --configure
+
+      - name: Build
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --build
+
+      - name: Package
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          python3 build.py --emscripten --package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{env.WASM_ARTIFACT_NAME}}
+          path: dist/
+          compression-level: 0
+
+      # Prepare GitHub Pages content (game files + landing page)
+      - name: Prepare GitHub Pages content
+        run: |
+          mkdir -p /tmp/gh-pages
+          # Unzip WASM bundle into pages dir
+          unzip "dist/$WASM_ARTIFACT_NAME" -d /tmp/gh-pages-unzipped
+          # The zip contains a subdirectory; copy its contents to the pages root
+          find /tmp/gh-pages-unzipped -mindepth 2 -maxdepth 2 -type f -exec cp {} /tmp/gh-pages/ \;
+          # Verify that the main game files were extracted
+          ls /tmp/gh-pages/Bugdom2.html /tmp/gh-pages/Bugdom2.wasm
+          # Copy landing page and Jekyll bypass
+          cp docs/index.html /tmp/gh-pages/index.html
+          touch /tmp/gh-pages/.nojekyll
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/gh-pages
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Deploy to GitHub Pages
+  # ────────────────────────────────────────────────────────────────────────────
+  deploy-pages:
+    needs: build-wasm
+    # Only deploy from the default branches; all other branches/PRs just build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Playwright tests – validate GitHub Pages landing page
+  # ────────────────────────────────────────────────────────────────────────────
+  test-pages:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=list
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Android (NDK cross-compile check for arm64-v8a)
+  # ────────────────────────────────────────────────────────────────────────────
+  build-android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      SDL_VER: "3.2.8"
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'recursive'}
+
+      - name: Install CMake and build essentials
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential python3 wget
+
+      - name: Download SDL3 source
+        run: |
+          wget -q "https://libsdl.org/release/SDL3-${SDL_VER}.tar.gz" -O /tmp/SDL3.tar.gz
+          tar -xzf /tmp/SDL3.tar.gz -C /tmp
+          echo "SDL_SRC=/tmp/SDL3-${SDL_VER}" >> $GITHUB_ENV
+
+      - name: Find Android NDK
+        run: |
+          # GitHub Actions provides ANDROID_NDK_ROOT or ANDROID_NDK_LATEST_HOME
+          NDK=${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME}}}
+          echo "NDK=$NDK" >> $GITHUB_ENV
+          ls "$NDK/build/cmake/android.toolchain.cmake"
+
+      - name: Build SDL3 for Android arm64-v8a
+        run: |
+          cmake -S "$SDL_SRC" -B "$SDL_SRC/build-android" \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_STATIC=ON \
+            -DSDL_SHARED=OFF \
+            -DCMAKE_INSTALL_PREFIX="$SDL_SRC/install-android"
+          cmake --build "$SDL_SRC/build-android" -j$(nproc)
+          cmake --install "$SDL_SRC/build-android"
+
+      - name: Cross-compile game for Android arm64-v8a
+        run: |
+          cmake -S . -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_STATIC=ON \
+            -DCMAKE_PREFIX_PATH="$SDL_SRC/install-android"
+          cmake --build build-android -j$(nproc)
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Create / update GitHub Release
+  # ────────────────────────────────────────────────────────────────────────────
+  create-release:
+    needs:
+      - build-linux-appimage
+      - build-windows
+      - build-wasm
+      - build-android
+    # Note: build-macos is not listed here because it requires Apple signing secrets.
+    # macOS artifacts are uploaded separately and included if the build succeeded.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: 'false'}
+
+      - name: Read game version
+        run: |
+          VERSION=$(grep -m1 'set(GAME_VERSION' CMakeLists.txt | grep -oP '(?<=")[0-9]+\.[0-9]+\.[0-9]+(?=")' )
+          echo "GAME_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4.1.3
+        with:
+          path: release-artifacts/
+
+      - name: List artifacts
+        run: ls -lR release-artifacts/
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.GAME_VERSION }}-dev
+          name: "Bugdom 2 v${{ env.GAME_VERSION }} (latest build)"
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            **Downloads:**
+            - 🐧 Linux x86_64 / aarch64 AppImage
+            - 🪟 Windows x64 ZIP
+            - 🌐 WebAssembly ZIP (play in the browser via GitHub Pages at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)
+
+            **WebAssembly features:**
+            - URL parameter `?level=N` (0–9) to skip menus and start at a specific level
+            - JavaScript API: `gameAPI.setFenceCollisionEnabled(false)`, `gameAPI.winLevel()`, `gameAPI.fullHeal()`
+            - Level file override via `Module.FS.writeFile('Data/Terrain/...', bytes)`
+          prerelease: true
+          files: release-artifacts/**/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

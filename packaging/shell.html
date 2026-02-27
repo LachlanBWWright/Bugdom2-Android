@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bugdom 2</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+
+    h1 {
+      font-size: 2em;
+      color: #6fbf6f;
+      margin: 10px 0 4px 0;
+      text-shadow: 0 0 20px #3a7a3a;
+    }
+
+    #subtitle {
+      font-size: 0.85em;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    #canvas-container {
+      position: relative;
+      border: 2px solid #2a4a2a;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 0 40px #0a2a0a;
+    }
+
+    canvas#canvas {
+      display: block;
+      background: #000;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    #overlay.clickable {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #status {
+      font-size: 1.1em;
+      color: #9fe09f;
+      margin-bottom: 10px;
+      text-shadow: 0 1px 3px #000;
+    }
+
+    #progress-container {
+      width: 300px;
+      height: 12px;
+      background: #1a1a1a;
+      border: 1px solid #3a5a3a;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    #progress {
+      height: 100%;
+      background: linear-gradient(90deg, #2a7a2a, #6fbf6f);
+      width: 0%;
+      transition: width 0.2s ease;
+      border-radius: 6px;
+    }
+
+    #play-btn {
+      display: none;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: #2a7a2a;
+      border: 3px solid #6fbf6f;
+      font-size: 2.8em;
+      color: #d0ffd0;
+      margin: 0 auto 12px auto;
+      transition: transform 0.15s, background 0.15s;
+      line-height: 84px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #play-btn:hover {
+      transform: scale(1.1);
+      background: #3a9a3a;
+    }
+
+    #play-label {
+      display: none;
+      font-size: 1.2em;
+      color: #9fe09f;
+      margin-top: 6px;
+    }
+
+    #bg-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,8,0,0.80);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #info {
+      margin-top: 10px;
+      font-size: 0.75em;
+      color: #555;
+      text-align: center;
+      max-width: 640px;
+    }
+
+    code { color: #7abf7a; }
+
+    .spinner {
+      border: 3px solid #1a2a1a;
+      border-top: 3px solid #6fbf6f;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>Bugdom 2</h1>
+  <p id="subtitle">© 2002 Pangea Software · WebAssembly Port</p>
+
+  <div id="canvas-container">
+    <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="1"></canvas>
+    <div id="bg-overlay">
+      <div id="overlay">
+        <div class="spinner" id="spinner"></div>
+        <div id="play-btn">▶</div>
+        <div id="status">Loading...</div>
+        <div id="progress-container">
+          <div id="progress"></div>
+        </div>
+        <div id="play-label">Click to play</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="info">
+    <b>URL params:</b>
+    <code>?level=N</code> (0–9) to start at a level directly.
+    &nbsp;|&nbsp;
+    <b>JS API:</b>
+    <code>Module.ccall('SetFenceCollisionEnabled', null, ['number'], [0])</code>
+    &nbsp;|&nbsp;
+    <b>Override level files:</b>
+    <code>Module.FS.writeFile('Data/Terrain/Level1_Garden.ter', bytes)</code>
+  </div>
+
+  <script type="text/javascript">
+    var statusEl     = document.getElementById('status');
+    var progressEl   = document.getElementById('progress');
+    var spinnerEl    = document.getElementById('spinner');
+    var overlayEl    = document.getElementById('overlay');
+    var bgOverlayEl  = document.getElementById('bg-overlay');
+    var playBtnEl    = document.getElementById('play-btn');
+    var playLabelEl  = document.getElementById('play-label');
+    var canvas       = document.getElementById('canvas');
+
+    var loadingDone  = false;   // true once Emscripten finishes loading the .data file
+    var gameStarted  = false;   // true once main() has been called
+
+    // Resize canvas to fill viewport sensibly
+    function resizeCanvas() {
+      var maxW = Math.min(window.innerWidth - 24, 1280);
+      var maxH = window.innerHeight - 160;
+      var w = Math.max(320, maxW);
+      var h = Math.round(w * 0.75);
+      if (h > maxH) { h = maxH; w = Math.round(h / 0.75); }
+      canvas.style.width  = w + 'px';
+      canvas.style.height = h + 'px';
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function showPlayButton() {
+      spinnerEl.style.display    = 'none';
+      statusEl.style.display     = 'none';
+      document.getElementById('progress-container').style.display = 'none';
+      playBtnEl.style.display    = 'block';
+      playLabelEl.style.display  = 'block';
+      overlayEl.classList.add('clickable');
+      overlayEl.onclick = startGame;
+      bgOverlayEl.style.cursor = 'pointer';
+      bgOverlayEl.onclick = startGame;
+    }
+
+    function startGame() {
+      if (gameStarted) return;
+      gameStarted = true;
+      bgOverlayEl.style.display = 'none';
+      canvas.focus();
+      // Call main() now that there has been user interaction (enables audio)
+      Module.callMain([]);
+    }
+
+    var Module = {
+      canvas: canvas,
+
+      // Prevent main() from running automatically; we call it after user clicks Play
+      noInitialRun: true,
+
+      print:    function(text) { console.log('[Bugdom2]', text); },
+      printErr: function(text) { console.error('[Bugdom2]', text); },
+
+      setStatus: function(text) {
+        if (!text) {
+          // Loading complete – show Play button if not already started
+          loadingDone = true;
+          if (!gameStarted) showPlayButton();
+          return;
+        }
+        statusEl.innerText = text;
+        var m = text.match(/\((\d+)\/(\d+)\)/);
+        if (m) {
+          progressEl.style.width = (100 * parseInt(m[1]) / parseInt(m[2])) + '%';
+        }
+      },
+
+      monitorRunDependencies: function(left) {
+        if (left === 0 && !loadingDone) {
+          // All dependencies resolved; setStatus('') will be called shortly
+          spinnerEl.style.display = 'none';
+        }
+      }
+    };
+
+    window.onerror = function(msg, url, line, col, err) {
+      statusEl.innerText = 'Error: ' + msg;
+      statusEl.style.color = '#ff6060';
+      playBtnEl.style.display = 'none';
+      spinnerEl.style.display = 'none';
+    };
+  </script>
+
+  {{{ SCRIPT }}}
+</body>
+</html>
