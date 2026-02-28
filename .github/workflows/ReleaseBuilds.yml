@@ -84,6 +84,7 @@ jobs:
       CODE_SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
     steps:
       - uses: apple-actions/import-codesign-certs@v3
+        if: secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 != ''
         with:
           p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
           p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
@@ -96,10 +97,12 @@ jobs:
       - run: python3 build.py --build
       - run: python3 build.py --package
       - name: Notarize
+        if: env.CODE_SIGN_IDENTITY != ''
         run: |
           xcrun notarytool store-credentials GameNotarizationProfile --apple-id ${{ secrets.APPLE_NOTARIZATION_USERNAME }} --password ${{ secrets.APPLE_NOTARIZATION_PASSWORD }} --team-id ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
           xcrun notarytool submit "dist/$ARTIFACT_NAME" --keychain-profile GameNotarizationProfile --wait
       - name: Staple
+        if: env.CODE_SIGN_IDENTITY != ''
         run: xcrun stapler staple "dist/$ARTIFACT_NAME"
       - uses: actions/upload-artifact@v4
         with:
@@ -301,7 +304,7 @@ jobs:
             -DANDROID_PLATFORM=android-24 \
             -DCMAKE_BUILD_TYPE=Release \
             -DSDL_STATIC=ON \
-            -DCMAKE_PREFIX_PATH="$SDL_SRC/install-android"
+            -DSDL3_DIR="$SDL_SRC/install-android/lib/cmake/SDL3"
           cmake --build build-android -j$(nproc)
 
   # ────────────────────────────────────────────────────────────────────────────
