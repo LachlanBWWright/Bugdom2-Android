@@ -82,9 +82,10 @@ jobs:
     timeout-minutes: 30
     env:
       CODE_SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
+      HAS_APPLE_CERTS: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 != '' }}
     steps:
       - uses: apple-actions/import-codesign-certs@v3
-        if: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 != '' }}
+        if: env.HAS_APPLE_CERTS == 'true'
         with:
           p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
           p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
