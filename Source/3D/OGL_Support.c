@@ -805,7 +805,9 @@ GLuint	textureName;
 		if (srcFormat == (GLint)0x80E1 /* GL_BGRA_EXT */)
 		{
 			uploadSrcFmt = GL_RGBA;
-			// Swizzle B↔R in the pixel data so the byte order matches GL_RGBA
+			// Swizzle B↔R in the pixel data so the byte order matches GL_RGBA.
+			// This mutates imageMemory in place; callers always free the buffer
+			// after OGL_TextureMap_Load returns, so this is safe.
 			int nPixels = width * height;
 			uint8_t* px = (uint8_t*) imageMemory;
 			for (int pi = 0; pi < nPixels; pi++)
