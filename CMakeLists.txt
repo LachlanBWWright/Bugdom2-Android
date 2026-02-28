@@ -259,7 +259,7 @@ if(EMSCRIPTEN)
 		-sENVIRONMENT=web
 		# Export C functions callable from JavaScript
 		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetPlayerHealth,_SetPlayerLives,_FullHeal,_WinLevel,_SetStartLevel"
-		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS"
+		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,callMain"
 		# Custom HTML shell with game canvas and JS API
 		--shell-file "${EMSCRIPTEN_SHELL}"
 	)

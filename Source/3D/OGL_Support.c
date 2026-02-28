@@ -798,8 +798,30 @@ GLuint	textureName;
 	}
 	else
 	{
-		GLint uploadSrcFmt = (srcFormat == (GLint)0x80E1 /* GL_BGRA_EXT */) ? GL_RGBA : srcFormat;
-		glTexImage2D(GL_TEXTURE_2D, 0, destFormat, width, height, 0, uploadSrcFmt, dataType, imageMemory);
+		GLint uploadSrcFmt = srcFormat;
+		GLint uploadDstFmt = destFormat;
+
+		// WebGL2 does not support GL_BGRA_EXT — swizzle BGRA→RGBA in CPU
+		if (srcFormat == (GLint)0x80E1 /* GL_BGRA_EXT */)
+		{
+			uploadSrcFmt = GL_RGBA;
+			// Swizzle B↔R in the pixel data so the byte order matches GL_RGBA
+			int nPixels = width * height;
+			uint8_t* px = (uint8_t*) imageMemory;
+			for (int pi = 0; pi < nPixels; pi++)
+			{
+				uint8_t tmp  = px[pi*4+0];   // B
+				px[pi*4+0]   = px[pi*4+2];   // R → slot 0
+				px[pi*4+2]   = tmp;           // B → slot 2
+			}
+		}
+
+		// WebGL2 requires format and internalformat to have the same channel count.
+		// If source has 4 channels (RGBA) but dest is 3-channel (GL_RGB), promote dest.
+		if (uploadSrcFmt == GL_RGBA && uploadDstFmt == GL_RGB)
+			uploadDstFmt = GL_RGBA;
+
+		glTexImage2D(GL_TEXTURE_2D, 0, uploadDstFmt, width, height, 0, uploadSrcFmt, dataType, imageMemory);
 	}
 #else
 	glTexImage2D(GL_TEXTURE_2D,
