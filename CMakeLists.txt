@@ -124,7 +124,12 @@ elseif(EMSCRIPTEN)
 	# (already included via GLOB_RECURSE above, but note this for clarity)
 endif()
 
-add_executable(${GAME_TARGET} ${GAME_SOURCES})
+if(ANDROID)
+	# Android: build as shared library loaded by SDL's Java activity
+	add_library(${GAME_TARGET} SHARED ${GAME_SOURCES})
+else()
+	add_executable(${GAME_TARGET} ${GAME_SOURCES})
+endif()
 
 target_include_directories(${GAME_TARGET} PRIVATE ${GAME_SRCDIR}/Headers)
 
@@ -220,6 +225,11 @@ else()
 	target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
 endif()
 
+# Android-specific libraries
+if(ANDROID)
+	target_link_libraries(${GAME_TARGET} PRIVATE GLESv3 EGL android log)
+endif()
+
 # Add required frameworks for KillMacMouseAcceleration
 if(APPLE)
 	target_link_libraries(${GAME_TARGET} PRIVATE "-framework Foundation" "-framework IOKit")
@@ -252,6 +262,7 @@ if(EMSCRIPTEN)
 		-sMAXIMUM_MEMORY=1073741824
 		# WebGL/OpenGL ES support
 		-sFULL_ES2=1
+		-sFULL_ES3=1
 		-sUSE_WEBGL2=1
 		# Bundle game data into a .data file served alongside the .wasm
 		--preload-file "${CMAKE_SOURCE_DIR}/Data@/Data"
@@ -259,7 +270,7 @@ if(EMSCRIPTEN)
 		-sENVIRONMENT=web
 		# Export C functions callable from JavaScript
 		"-sEXPORTED_FUNCTIONS=_main,_SetFenceCollisionEnabled,_GetFenceCollisionEnabled,_SetPlayerHealth,_SetPlayerLives,_FullHeal,_WinLevel,_SetStartLevel"
-		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS"
+		"-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,callMain"
 		# Custom HTML shell with game canvas and JS API
 		--shell-file "${EMSCRIPTEN_SHELL}"
 	)

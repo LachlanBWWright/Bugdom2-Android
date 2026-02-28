@@ -15,97 +15,9 @@ permissions:
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
-  # Linux AppImage (x86_64 and aarch64)
+  # NOTE: Linux, Windows, macOS, and create-release jobs are disabled.
+  # Only WASM, Android, test-pages, and deploy-pages are active.
   # ────────────────────────────────────────────────────────────────────────────
-  build-linux-appimage:
-    runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:  # Use oldest available Ubuntu for maximum glibc compatibility
-          - { name: x86_64,   os: ubuntu-22.04 }
-          - { name: aarch64,  os: ubuntu-22.04-arm }
-    steps:
-      - uses: actions/checkout@v4
-        with: {submodules: 'recursive'}
-      - name: Get build dependencies from APT
-        # cf. https://github.com/libsdl-org/SDL/blob/main/docs/README-linux.md
-        # + desktop-file-utils for appimagetool
-        run: |
-          sudo apt update
-          sudo apt install -y libasound2-dev libpulse-dev \
-            libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
-            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
-            libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
-            libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev fcitx-libs-dev \
-            libpipewire-0.3-dev libwayland-dev libdecor-0-dev liburing-dev \
-            desktop-file-utils
-      - run: echo "ARTIFACT_NAME=$(python3 build.py --print-artifact-name)" >> $GITHUB_ENV
-      - run: python3 build.py --dependencies
-      - run: python3 build.py --configure
-      - run: python3 build.py --build
-      - run: python3 build.py --package
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.ARTIFACT_NAME}}
-          path: dist/
-          compression-level: 0
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # Windows
-  # ────────────────────────────────────────────────────────────────────────────
-  build-windows:
-    runs-on: windows-2022
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with: {submodules: 'recursive'}
-      - run: |
-          $ARTIFACT_NAME = python3 build.py --print-artifact-name
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $env:GITHUB_ENV
-      - run: python3 build.py --dependencies
-      - run: python3 build.py --configure -G 'Visual Studio 17 2022'
-      - run: python3 build.py --build
-      - run: python3 build.py --package
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.ARTIFACT_NAME}}
-          path: dist/
-          compression-level: 0
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # macOS
-  # ────────────────────────────────────────────────────────────────────────────
-  build-macos:
-    runs-on: macos-latest  # as of January 2025, this still supports the macOS 10.13 deployment target
-    timeout-minutes: 30
-    env:
-      CODE_SIGN_IDENTITY: ${{ secrets.APPLE_CODE_SIGN_IDENTITY }}
-    steps:
-      - uses: apple-actions/import-codesign-certs@v3
-        with:
-          p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
-          p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
-      - uses: actions/checkout@v4
-        with: {submodules: 'recursive'}
-      - name: Get artifact name
-        run: echo "ARTIFACT_NAME=$(python3 build.py --print-artifact-name)" >> $GITHUB_ENV
-      - run: python3 build.py --dependencies
-      - run: python3 build.py --configure
-      - run: python3 build.py --build
-      - run: python3 build.py --package
-      - name: Notarize
-        run: |
-          xcrun notarytool store-credentials GameNotarizationProfile --apple-id ${{ secrets.APPLE_NOTARIZATION_USERNAME }} --password ${{ secrets.APPLE_NOTARIZATION_PASSWORD }} --team-id ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
-          xcrun notarytool submit "dist/$ARTIFACT_NAME" --keychain-profile GameNotarizationProfile --wait
-      - name: Staple
-        run: xcrun stapler staple "dist/$ARTIFACT_NAME"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{env.ARTIFACT_NAME}}
-          path: dist/
-          compression-level: 0
 
   # ────────────────────────────────────────────────────────────────────────────
   # WebAssembly (Emscripten)
@@ -122,10 +34,21 @@ jobs:
           sudo apt update
           sudo apt install -y cmake build-essential python3
 
+      # Cache Emscripten SDK to avoid re-downloading on every run (~2 min saved)
+      - name: Cache Emscripten SDK
+        id: cache-emsdk
+        uses: actions/cache@v4
+        with:
+          path: /tmp/emsdk
+          key: emsdk-${{ runner.os }}-${{ runner.arch }}-v1
+          restore-keys: emsdk-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Install Emscripten SDK
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk
-          /tmp/emsdk/emsdk install latest
+          if [ ! -f /tmp/emsdk/emsdk ]; then
+            git clone --depth=1 https://github.com/emscripten-core/emsdk.git /tmp/emsdk
+            /tmp/emsdk/emsdk install latest
+          fi
           /tmp/emsdk/emsdk activate latest
 
       - name: Get WASM artifact name
@@ -163,15 +86,22 @@ jobs:
       - name: Prepare GitHub Pages content
         run: |
           mkdir -p /tmp/gh-pages
-          # Unzip WASM bundle into pages dir
+
+          # Copy all static assets from docs/ (landing page, .nojekyll, etc.)
+          for f in docs/*; do
+            cp -r "$f" /tmp/gh-pages/ 2>/dev/null || true
+          done
+
+          # Unzip WASM bundle into pages dir (overlays game files on top)
           unzip "dist/$WASM_ARTIFACT_NAME" -d /tmp/gh-pages-unzipped
           # The zip contains a subdirectory; copy its contents to the pages root
           find /tmp/gh-pages-unzipped -mindepth 2 -maxdepth 2 -type f -exec cp {} /tmp/gh-pages/ \;
+
           # Verify that the main game files were extracted
-          ls /tmp/gh-pages/Bugdom2.html /tmp/gh-pages/Bugdom2.wasm
-          # Copy landing page and Jekyll bypass
-          cp docs/index.html /tmp/gh-pages/index.html
-          touch /tmp/gh-pages/.nojekyll
+          ls /tmp/gh-pages/Bugdom2.html /tmp/gh-pages/Bugdom2.wasm /tmp/gh-pages/index.html
+
+          echo "Site contents:"
+          ls -lh /tmp/gh-pages/
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -283,58 +213,5 @@ jobs:
             -DANDROID_PLATFORM=android-24 \
             -DCMAKE_BUILD_TYPE=Release \
             -DSDL_STATIC=ON \
-            -DCMAKE_PREFIX_PATH="$SDL_SRC/install-android"
+            -DSDL3_DIR="$SDL_SRC/install-android/lib/cmake/SDL3"
           cmake --build build-android -j$(nproc)
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # Create / update GitHub Release
-  # ────────────────────────────────────────────────────────────────────────────
-  create-release:
-    needs:
-      - build-linux-appimage
-      - build-windows
-      - build-wasm
-      - build-android
-    # Note: build-macos is not listed here because it requires Apple signing secrets.
-    # macOS artifacts are uploaded separately and included if the build succeeded.
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with: {submodules: 'false'}
-
-      - name: Read game version
-        run: |
-          VERSION=$(grep -m1 'set(GAME_VERSION' CMakeLists.txt | grep -oP '(?<=")[0-9]+\.[0-9]+\.[0-9]+(?=")' )
-          echo "GAME_VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4.1.3
-        with:
-          path: release-artifacts/
-
-      - name: List artifacts
-        run: ls -lR release-artifacts/
-
-      - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.GAME_VERSION }}-dev
-          name: "Bugdom 2 v${{ env.GAME_VERSION }} (latest build)"
-          body: |
-            Automated build from commit ${{ github.sha }}.
-
-            **Downloads:**
-            - 🐧 Linux x86_64 / aarch64 AppImage
-            - 🪟 Windows x64 ZIP
-            - 🌐 WebAssembly ZIP (play in the browser via GitHub Pages at https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)
-
-            **WebAssembly features:**
-            - URL parameter `?level=N` (0–9) to skip menus and start at a specific level
-            - JavaScript API: `gameAPI.setFenceCollisionEnabled(false)`, `gameAPI.winLevel()`, `gameAPI.fullHeal()`
-            - Level file override via `Module.FS.writeFile('Data/Terrain/...', bytes)`
-          prerelease: true
-          files: release-artifacts/**/*
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
