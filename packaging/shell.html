@@ -357,7 +357,7 @@
       }
     };
 
-    window.onerror = function(msg) {
+    window.onerror = function(msg, url, line, col, err) {
       statusEl.innerText = 'Error: ' + msg;
       statusEl.style.color = '#ff6060';
       playBtnEl.style.display = 'none';
