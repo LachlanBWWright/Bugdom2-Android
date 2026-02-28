@@ -152,6 +152,8 @@ static const char* kFragSrc =
 static GLuint gProgram   = 0;
 static GLuint gVAO       = 0;
 static GLuint gImmVBO    = 0;   // VBO for immediate mode vertex data
+static GLuint gArrayVBO  = 0;   // VBO for vertex array draw calls
+static GLuint gArrayEBO  = 0;   // EBO for vertex array draw calls
 
 // Uniform locations
 static GLint uProj, uMV, uLighting, uAmbient, uNLights;
@@ -389,6 +391,8 @@ void GLES3Compat_Init(void)
     // Create VAO and immediate-mode VBO
     glGenVertexArrays(1, &gVAO);
     glGenBuffers(1, &gImmVBO);
+    glGenBuffers(1, &gArrayVBO);
+    glGenBuffers(1, &gArrayEBO);
 
     // Initialise matrix stacks to identity
     MatIdentity(gMVStack[0]);
@@ -575,12 +579,56 @@ void GLES3_DrawElements(GLenum mode, GLsizei count, GLenum type, const void* ind
     glUseProgram(gProgram);
     glBindVertexArray(gVAO);
 
-    // Use client-side pointer (FULL_ES2=1 uploads these automatically)
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // Upload vertex attribute data to a shared VBO.
+    // WebGL2 does not support client-side vertex pointers, so we pack all
+    // enabled arrays into one buffer and set up offsets.
+    glBindBuffer(GL_ARRAY_BUFFER, gArrayVBO);
 
+    // Calculate total buffer size needed
+    size_t vertBytes = 0, normBytes = 0, colorBytes = 0, texcBytes = 0;
+    size_t totalSize = 0;
+    int nVerts = 0;
+
+    // Determine vertex count from the index data
+    if (type == GL_UNSIGNED_INT) {
+        const GLuint* idx = (const GLuint*)indices;
+        for (GLsizei i = 0; i < count; i++)
+            if ((int)idx[i] + 1 > nVerts) nVerts = (int)idx[i] + 1;
+    } else if (type == GL_UNSIGNED_SHORT) {
+        const GLushort* idx = (const GLushort*)indices;
+        for (GLsizei i = 0; i < count; i++)
+            if ((int)idx[i] + 1 > nVerts) nVerts = (int)idx[i] + 1;
+    }
+    if (nVerts == 0) return;
+
+    if (gVertArrayEnabled && gVertArrayPtr)   { vertBytes  = (size_t)nVerts * 3 * sizeof(float); }
+    if (gNormArrayEnabled && gNormArrayPtr)   { normBytes  = (size_t)nVerts * 3 * sizeof(float); }
+    if (gColorArrayEnabled && gColorArrayPtr) {
+        if (gColorArrayType == GL_UNSIGNED_BYTE)
+            colorBytes = (size_t)nVerts * (size_t)gColorArraySize * sizeof(GLubyte);
+        else
+            colorBytes = (size_t)nVerts * (size_t)gColorArraySize * sizeof(float);
+    }
+    if (gTexcArrayEnabled && gTexcArrayPtr)   { texcBytes  = (size_t)nVerts * 2 * sizeof(float); }
+
+    size_t offVert  = 0;
+    size_t offNorm  = offVert + vertBytes;
+    size_t offColor = offNorm + normBytes;
+    size_t offTexc  = offColor + colorBytes;
+    totalSize       = offTexc + texcBytes;
+
+    if (totalSize > 0) {
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)totalSize, NULL, GL_STREAM_DRAW);
+        if (vertBytes)  glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)offVert,  (GLsizeiptr)vertBytes,  gVertArrayPtr);
+        if (normBytes)  glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)offNorm,  (GLsizeiptr)normBytes,  gNormArrayPtr);
+        if (colorBytes) glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)offColor, (GLsizeiptr)colorBytes, gColorArrayPtr);
+        if (texcBytes)  glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)offTexc,  (GLsizeiptr)texcBytes,  gTexcArrayPtr);
+    }
+
+    // Bind vertex attributes from the VBO
     if (gVertArrayEnabled && gVertArrayPtr) {
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, gVertArrayPtr);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*)offVert);
     } else {
         glDisableVertexAttribArray(0);
         glVertexAttrib3f(0, 0, 0, 0);
@@ -588,7 +636,7 @@ void GLES3_DrawElements(GLenum mode, GLsizei count, GLenum type, const void* ind
 
     if (gNormArrayEnabled && gNormArrayPtr) {
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, gNormArrayPtr);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (const void*)offNorm);
     } else {
         glDisableVertexAttribArray(1);
         glVertexAttrib3f(1, gCurrentNormal[0], gCurrentNormal[1], gCurrentNormal[2]);
@@ -597,9 +645,9 @@ void GLES3_DrawElements(GLenum mode, GLsizei count, GLenum type, const void* ind
     if (gColorArrayEnabled && gColorArrayPtr) {
         glEnableVertexAttribArray(2);
         if (gColorArrayType == GL_UNSIGNED_BYTE)
-            glVertexAttribPointer(2, gColorArraySize, GL_UNSIGNED_BYTE, GL_TRUE, 0, gColorArrayPtr);
+            glVertexAttribPointer(2, gColorArraySize, GL_UNSIGNED_BYTE, GL_TRUE, 0, (const void*)offColor);
         else
-            glVertexAttribPointer(2, gColorArraySize, GL_FLOAT, GL_FALSE, 0, gColorArrayPtr);
+            glVertexAttribPointer(2, gColorArraySize, GL_FLOAT, GL_FALSE, 0, (const void*)offColor);
     } else {
         glDisableVertexAttribArray(2);
         glVertexAttrib4f(2, gCurrentColor[0], gCurrentColor[1], gCurrentColor[2], gCurrentColor[3]);
@@ -607,15 +655,20 @@ void GLES3_DrawElements(GLenum mode, GLsizei count, GLenum type, const void* ind
 
     if (gTexcArrayEnabled && gTexcArrayPtr) {
         glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, gTexcArrayPtr);
+        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, (const void*)offTexc);
     } else {
         glDisableVertexAttribArray(3);
         glVertexAttrib2f(3, gCurrentTexCoord[0], gCurrentTexCoord[1]);
     }
 
+    // Upload index data to EBO
+    size_t indexSize = (size_t)count * (type == GL_UNSIGNED_INT ? sizeof(GLuint) : sizeof(GLushort));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gArrayEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)indexSize, indices, GL_STREAM_DRAW);
+
     UploadUniforms();
 
-    glDrawElements(mode, count, type, indices);
+    glDrawElements(mode, count, type, 0);
 }
 
 //=============================================================

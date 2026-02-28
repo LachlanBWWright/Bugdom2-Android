@@ -1446,7 +1446,14 @@ GLenum OGL_CheckError_Impl(const char* file, const int line)
 				text = "";
 		}
 
+#ifdef __EMSCRIPTEN__
+		// WebGL2 has stricter validation than desktop GL.
+		// Many GL errors are non-fatal in practice (e.g. unsupported format combos,
+		// client-side array edge cases). Log and continue instead of crashing.
+		SDL_Log("WebGL warning: GL error 0x%x (%s) in %s:%d", error, text, file, line);
+#else
 		DoFatalAlert("OpenGL error 0x%x (%s)\nin %s:%d", error, text, file, line);
+#endif
 	}
 	return error;
 }
