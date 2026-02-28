@@ -18,6 +18,11 @@ node_modules/
 playwright-report/
 test-results/
 
+# Android build artifacts
+android/.gradle/
+android/app/build/
+android/local.properties
+
 # IDEs and OS-specific stuff
 .vs/
 .idea/

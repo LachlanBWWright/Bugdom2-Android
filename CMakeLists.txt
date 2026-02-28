@@ -124,7 +124,12 @@ elseif(EMSCRIPTEN)
 	# (already included via GLOB_RECURSE above, but note this for clarity)
 endif()
 
-add_executable(${GAME_TARGET} ${GAME_SOURCES})
+if(ANDROID)
+	# Android: build as shared library loaded by SDL's Java activity
+	add_library(${GAME_TARGET} SHARED ${GAME_SOURCES})
+else()
+	add_executable(${GAME_TARGET} ${GAME_SOURCES})
+endif()
 
 target_include_directories(${GAME_TARGET} PRIVATE ${GAME_SRCDIR}/Headers)
 
@@ -218,6 +223,11 @@ if(EMSCRIPTEN OR ANDROID)
 	target_link_libraries(${GAME_TARGET} PRIVATE Pomme)
 else()
 	target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+endif()
+
+# Android-specific libraries
+if(ANDROID)
+	target_link_libraries(${GAME_TARGET} PRIVATE GLESv3 EGL android log)
 endif()
 
 # Add required frameworks for KillMacMouseAcceleration
